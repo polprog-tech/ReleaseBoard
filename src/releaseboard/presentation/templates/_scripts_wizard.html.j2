@@ -131,7 +131,12 @@
       if (tokenInput && tokenInput.value.trim()) {
         const val = tokenInput.value.trim();
         const isGH = WIZ.provider === 'github';
-        const validFormat = isGH ? /^(ghp_|github_pat_)/i.test(val) : /^(glpat-)/i.test(val);
+        /* GitHub tokens: ghp_ or github_pat_
+           GitLab tokens: glpat-, glcbt-, gldt- or any 20+ char string
+           (self-hosted instances may use non-standard prefixes) */
+        const validFormat = isGH
+          ? /^(ghp_|github_pat_)/i.test(val)
+          : (val.length >= 20 || /^(glpat-|glcbt-|gldt-|gl\w+-)/i.test(val));
         if (!validFormat) {
           tokenInput.classList.add('has-error');
           const errDiv = document.createElement('div');
@@ -313,6 +318,15 @@
       const data = await resp.json();
       WIZ.discovered = data;
       WIZ.warnings = data.warnings || [];
+
+      /* Persist tokens in sessionStorage so startAnalysis() can
+         re-send them after page reload.  Never stored to disk. */
+      try {
+        var _wtGH = WIZ.provider === 'github' ? (document.getElementById('wizProviderToken') || {}).value || '' : '';
+        var _wtGL = WIZ.provider === 'gitlab' ? (document.getElementById('wizProviderToken') || {}).value || '' : '';
+        if (_wtGH) sessionStorage.setItem('rb-github-token', _wtGH);
+        if (_wtGL) sessionStorage.setItem('rb-gitlab-token', _wtGL);
+      } catch(e){}
 
       // Update scanning UI
       (data.layers || []).forEach(layer => {

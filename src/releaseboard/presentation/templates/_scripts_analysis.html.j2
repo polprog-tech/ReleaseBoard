@@ -44,7 +44,20 @@
     setAnalysisPhase('starting');
     _sseReconnectAttempts = 0;
     connectSSE();
-    await fetch('/api/analyze',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
+    /* Send stored tokens (if any) so the server can re-apply them
+       even after a page reload.  Tokens live in sessionStorage only
+       — never persisted to disk. */
+    var _body = undefined;
+    var _hdrs = {'X-Requested-With':'XMLHttpRequest'};
+    try {
+      var _ght = sessionStorage.getItem('rb-github-token') || '';
+      var _glt = sessionStorage.getItem('rb-gitlab-token') || '';
+      if (_ght || _glt) {
+        _body = JSON.stringify({github_token: _ght, gitlab_token: _glt});
+        _hdrs['Content-Type'] = 'application/json';
+      }
+    } catch(e){}
+    await fetch('/api/analyze',{method:'POST',headers:_hdrs,body:_body});
   }
 
   async function stopAnalysis(){

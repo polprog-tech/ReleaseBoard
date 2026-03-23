@@ -125,7 +125,10 @@ def create_app(
         state: AppState | None = None
     else:
         state = AppState(config_path)
-    git_provider = SmartGitProvider(gitlab_token=os.environ.get("GITLAB_TOKEN") or None)
+    git_provider = SmartGitProvider(
+        github_token=os.environ.get("GITHUB_TOKEN") or None,
+        gitlab_token=os.environ.get("GITLAB_TOKEN") or None,
+    )
     service = AnalysisService(git_provider)
     release_pilot = ReleasePilotAdapter()
     _start_time = time.monotonic()
@@ -136,6 +139,9 @@ def create_app(
     @asynccontextmanager
     async def _lifespan(app_: FastAPI) -> AsyncIterator[None]:
         logger.info("ReleaseBoard v%s starting", __version__)
+        _gh = "set" if git_provider.get_token_for_url("https://github.com") else "not set"
+        _gl = "set" if git_provider.get_token_for_url("https://gitlab.com") else "not set"
+        logger.info("Auth tokens: GITHUB_TOKEN=%s, GITLAB_TOKEN=%s", _gh, _gl)
         yield
         if state is not None and state.analysis_lock.locked():
             service.request_cancel()
@@ -333,7 +339,11 @@ def create_app(
             logger.error("Dashboard template rendering failed: %s", exc)
             _title = t("error.page_title", locale=locale) or "ReleaseBoard Error"
             _heading = t("error.dashboard_rendering", locale=locale) or "Dashboard Rendering Error"
-            _body = t("error.check_logs", locale=locale) or "The dashboard could not be rendered. Please check the server logs for details."
+            _body = (
+                t("error.check_logs", locale=locale)
+                or "The dashboard could not be rendered."
+                " Please check the server logs for details."
+            )
             html = (
                 f"<!DOCTYPE html><html><head><title>{_title}</title></head>"
                 f"<body><h1>{_heading}</h1>"
@@ -829,7 +839,10 @@ def create_app(
             logger.error("Export HTML template rendering failed: %s", exc)
             _title = t("error.page_title", locale=locale) or "ReleaseBoard Error"
             _heading = t("error.export_rendering", locale=locale) or "Export Rendering Error"
-            _body = t("error.export_check_logs", locale=locale) or "The dashboard could not be rendered for export."
+            _body = (
+                t("error.export_check_logs", locale=locale)
+                or "The dashboard could not be rendered for export."
+            )
             html = (
                 f"<!DOCTYPE html><html><head><title>{_title}</title></head>"
                 f"<body><h1>{_heading}</h1>"

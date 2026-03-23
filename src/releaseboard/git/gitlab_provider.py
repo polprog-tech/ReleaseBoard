@@ -90,6 +90,17 @@ class GitLabProvider(GitProvider):
             headers["PRIVATE-TOKEN"] = self._token
         return headers
 
+    def _api_base(self, host: str) -> str:
+        """Build the API base URL, embedding token credentials when available.
+
+        Uses ``https://oauth2:TOKEN@host/api/v4`` so that authentication
+        works even through corporate proxies that strip custom headers
+        like ``PRIVATE-TOKEN``.
+        """
+        if self._token:
+            return f"https://oauth2:{self._token}@{host}/api/v4"
+        return f"https://{host}/api/v4"
+
     def _raise_for_status(
         self,
         repo_url: str,
@@ -116,9 +127,13 @@ class GitLabProvider(GitProvider):
                 kind=GitErrorKind.AUTH_REQUIRED,
             )
         if status == 403:
+            hint = (
+                " Ensure the token has read access (Reporter role or higher)"
+                " to this project."
+            )
             raise GitAccessError(
                 repo_url,
-                f"Access denied (HTTP 403). {detail}".strip(),
+                f"Access denied (HTTP 403). {detail}{hint}".strip(),
                 kind=GitErrorKind.ACCESS_DENIED,
             )
         if status == 0:
@@ -191,6 +206,14 @@ class GitLabProvider(GitProvider):
 
         Returns list of dicts: name, url, default_branch, description, visibility.
         """
+        # Re-derive api_base with embedded token credentials so
+        # that auth works even through proxies that strip headers.
+        try:
+            _host = urllib.parse.urlparse(api_base).hostname or ""
+            if _host:
+                api_base = self._api_base(_host)
+        except Exception:
+            pass
         encoded = urllib.parse.quote(group_path, safe="")
         repos: list[dict[str, Any]] = []
         page = 1
@@ -253,7 +276,7 @@ class GitLabProvider(GitProvider):
             return []
         host, namespace, project = parsed
         encoded = urllib.parse.quote(f"{namespace}/{project}", safe="")
-        api_base = f"https://{host}/api/v4"
+        api_base = self._api_base(host)
 
         branches: list[str] = []
         page = 1
@@ -286,7 +309,7 @@ class GitLabProvider(GitProvider):
         host, namespace, project = parsed
         encoded_project = urllib.parse.quote(f"{namespace}/{project}", safe="")
         encoded_branch = urllib.parse.quote(branch_name, safe="")
-        api_base = f"https://{host}/api/v4"
+        api_base = self._api_base(host)
 
         url = f"{api_base}/projects/{encoded_project}/repository/branches/{encoded_branch}"
         data, status = self._get_json(url, timeout)
@@ -331,7 +354,7 @@ class GitLabProvider(GitProvider):
 
         host, namespace, project = parsed
         encoded_project = urllib.parse.quote(f"{namespace}/{project}", safe="")
-        api_base = f"https://{host}/api/v4"
+        api_base = self._api_base(host)
 
         # Get project info to find default branch
         project_url = f"{api_base}/projects/{encoded_project}"
@@ -395,9 +418,7 @@ class GitLabProvider(GitProvider):
 
         host, namespace, project = parsed
         encoded_project = urllib.parse.quote(f"{namespace}/{project}", safe="")
-        api_base = f"https://{host}/api/v4"
-
-        # Fetch tags — newest first (up to 2 pages of 20)
+        api_base = self._api_base(host)
         tags_data: list[dict] = []
         for page in (1, 2):
             url = (

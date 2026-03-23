@@ -1,4 +1,5 @@
 """Regression tests for production audit fixes (second pass).
+"""Regression tests for production audit fixes (second pass).
 
 Covers: operator precedence in config backfill, schema caching,
 atomic first-run config write, SSE serialization logging.
@@ -6,11 +7,7 @@ atomic first-run config write, SSE serialization logging.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
-
-import pytest
 
 
 class TestConfigBackfillPrecedence:

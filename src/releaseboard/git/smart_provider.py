@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse, urlunparse
 
 from releaseboard.git.github_provider import GitHubProvider, parse_github_url
 from releaseboard.git.gitlab_provider import GitLabProvider, is_gitlab_url
@@ -68,6 +69,26 @@ class SmartGitProvider(GitProvider):
             return self._gitlab.token
         return ""
 
+    def _auth_url(self, repo_url: str) -> str:
+        """Inject auth credentials into a URL for git CLI operations.
+
+        GitHub:  https://TOKEN@github.com/org/repo
+        GitLab:  https://oauth2:TOKEN@gitlab.example.com/group/project
+        """
+        token = self.get_token_for_url(repo_url)
+        if not token:
+            return repo_url
+        parsed = urlparse(repo_url)
+        if not parsed.scheme or not parsed.hostname:
+            return repo_url
+        if self._is_gitlab(repo_url):
+            netloc = f"oauth2:{token}@{parsed.hostname}"
+        else:
+            netloc = f"{token}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc))
+
     def update_tokens(
         self,
         *,
@@ -81,13 +102,14 @@ class SmartGitProvider(GitProvider):
         """
         if github_token is not None:
             self._github = GitHubProvider(token=github_token or None)
-            # Reset availability so the new token gets a fresh chance
             self._github_api_available = True
             self._github_api_unavailable_since = None
+            logger.info("GitHub token updated (token %s)", "set" if github_token else "cleared")
         if gitlab_token is not None:
             self._gitlab = GitLabProvider(token=gitlab_token or None)
             self._gitlab_api_available = True
             self._gitlab_api_unavailable_since = None
+            logger.info("GitLab token updated (token %s)", "set" if gitlab_token else "cleared")
 
     def _check_api_available(self, provider: str) -> bool:
         """Check if an API should be attempted (with TTL-based reset)."""
@@ -153,7 +175,7 @@ class SmartGitProvider(GitProvider):
                 )
 
         try:
-            return self._local.list_remote_branches(repo_url, timeout)
+            return self._local.list_remote_branches(self._auth_url(repo_url), timeout)
         except GitAccessError as local_exc:
             api_detail = api_error.detail if api_error else "skipped (previously failed)"
             msg = f"GitHub API: {api_detail}; Git CLI: {local_exc.detail}"
@@ -175,7 +197,7 @@ class SmartGitProvider(GitProvider):
                 )
 
         try:
-            return self._local.list_remote_branches(repo_url, timeout)
+            return self._local.list_remote_branches(self._auth_url(repo_url), timeout)
         except GitAccessError as local_exc:
             api_detail = api_error.detail if api_error else "skipped (previously failed)"
             msg = f"GitLab API: {api_detail}; Git CLI: {local_exc.detail}"
@@ -204,7 +226,7 @@ class SmartGitProvider(GitProvider):
                     "GitHub API unavailable (%s) for branch info, using git CLI",
                     exc.kind.value,
                 )
-        return self._local.get_branch_info(repo_url, branch_name, timeout)
+        return self._local.get_branch_info(self._auth_url(repo_url), branch_name, timeout)
 
     def _get_branch_info_gitlab(
         self, repo_url: str, branch_name: str, timeout: int
@@ -220,7 +242,7 @@ class SmartGitProvider(GitProvider):
                     "GitLab API unavailable (%s) for branch info, using git CLI",
                     exc.kind.value,
                 )
-        return self._local.get_branch_info(repo_url, branch_name, timeout)
+        return self._local.get_branch_info(self._auth_url(repo_url), branch_name, timeout)
 
     def get_default_branch_info(
         self, repo_url: str, timeout: int = 30
@@ -246,7 +268,7 @@ class SmartGitProvider(GitProvider):
                     "GitHub API unavailable (%s) for default branch, using git CLI",
                     exc.kind.value,
                 )
-        return self._local.get_default_branch_info(repo_url, timeout)
+        return self._local.get_default_branch_info(self._auth_url(repo_url), timeout)
 
     def _get_default_branch_gitlab(
         self, repo_url: str, timeout: int
@@ -262,4 +284,4 @@ class SmartGitProvider(GitProvider):
                     "GitLab API unavailable (%s) for default branch, using git CLI",
                     exc.kind.value,
                 )
-        return self._local.get_default_branch_info(repo_url, timeout)
+        return self._local.get_default_branch_info(self._auth_url(repo_url), timeout)

@@ -242,11 +242,10 @@ class CSRFMiddleware:
             if xrw != "XMLHttpRequest" and not path.startswith("/api/health"):
                 # Fall back to Referer check for same-origin form submissions
                 referer = _get_header(scope, "referer")
-                if referer and host:
-                    if (
-                        not referer.startswith(f"http://{host}")
-                        and not referer.startswith(f"https://{host}")
-                    ):
+                if referer and host and (
+                    not referer.startswith(f"http://{host}")
+                    and not referer.startswith(f"https://{host}")
+                ):
                         resp = JSONResponse(
                             {"ok": False, "error": "CSRF validation failed"},
                             status_code=403,
