@@ -356,7 +356,7 @@
     const countEl = document.getElementById('jsonValCount');
     const listEl = document.getElementById('jsonValErrors');
     try{
-      const res = await fetch('/api/config/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)});
+      const res = await fetch('/api/config/validate',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(obj)});
       const data = await res.json();
       const errors = data.errors || [];
       if(errors.length === 0){
@@ -535,8 +535,8 @@
   async function validateDraft(){
     const cleaned = JSON.stringify(cleanDraft(draft));
     const [valRes] = await Promise.all([
-      fetch('/api/config/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:cleaned}),
-      fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:cleaned})
+      fetch('/api/config/validate',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:cleaned}),
+      fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:cleaned})
     ]);
     const data = await valRes.json();
     validationErrors = data.errors || [];
@@ -549,7 +549,7 @@
       panel.innerHTML = '<div class="validation-ok">✓ '+esc(_t('ui.validation.config_valid'))+'</div>';
       _updateActionButtons(false, []);
     }
-    const stRes = await fetch('/api/config');
+    const stRes = await fetch('/api/config',{headers:{'X-Requested-With':'XMLHttpRequest'}});
     const stData = await stRes.json();
     updateUnsavedBadge(stData.has_unsaved_changes);
   }
@@ -574,9 +574,9 @@
       }
     }
     try {
-      const r1 = await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cleanDraft(draft))});
+      const r1 = await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(cleanDraft(draft))});
       if(!r1.ok){ showSaveErrors([_t('validation.save_failed','Failed to update configuration')]); return; }
-      const r2 = await fetch('/api/config/save',{method:'POST'});
+      const r2 = await fetch('/api/config/save',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
       const d2 = await r2.json();
       if(!d2.ok){ showSaveErrors(d2.errors||[_t('validation.save_failed','Save failed')]); return; }
       closeDrawer();
@@ -595,8 +595,8 @@
       }
     }
     try {
-      await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cleanDraft(draft))});
-      const res = await fetch('/api/config/save',{method:'POST'});
+      await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(cleanDraft(draft))});
+      const res = await fetch('/api/config/save',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
       const data = await res.json();
       if(data.ok){
         updateUnsavedBadge(false);
@@ -610,7 +610,7 @@
   }
 
   async function resetConfig(){
-    const res = await fetch('/api/config/reset',{method:'POST'});
+    const res = await fetch('/api/config/reset',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
     const data = await res.json();
     if(data.ok){
       draft = data.draft;
@@ -688,7 +688,7 @@
   function _loadCfgImportSchema() {
     const d = document.getElementById('cfgSchemaDisplay'); if (!d || d._loaded) return;
     d._loaded = true;
-    fetch('/api/config/schema').then(r => r.json()).then(resp => {
+    fetch('/api/config/schema',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r => r.json()).then(resp => {
       if (resp.ok) {
         d.textContent = JSON.stringify(resp.schema, null, 2);
         const ex = document.getElementById('cfgExampleDisplay');
@@ -737,14 +737,26 @@
 
       const res = await fetch('/api/config/validate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: JSON.stringify(parsed)
       });
       const result = await res.json();
 
       if (result.ok) {
         _cfgImportData = parsed;
-        status.innerHTML = '<div class="rc-validation-msg success rc-validation-msg-block">✅ ' + esc(_t('ui.config_import.valid')) + '</div>';
+        // Hide dropzone after successful validation
+        const dz = document.getElementById('cfgImportDropzone'); if (dz) dz.style.display = 'none';
+        // Build import summary
+        const repos = (parsed.repositories || []);
+        const relName = (parsed.release && parsed.release.name) || '';
+        const layers = (parsed.layers || []);
+        let summaryParts = [];
+        if (relName) summaryParts.push('<strong>' + esc(relName) + '</strong>');
+        if (repos.length) summaryParts.push(repos.length + ' repo' + (repos.length !== 1 ? 's' : ''));
+        if (layers.length) summaryParts.push(layers.length + ' layer' + (layers.length !== 1 ? 's' : ''));
+        const fileLabel = '<span style="opacity:.7">\ud83d\udcc4 ' + esc(file.name) + '</span>';
+        const summary = '<br>' + fileLabel + (summaryParts.length ? '<br>' + summaryParts.join(', ') : '');
+        status.innerHTML = '<div class="rc-validation-msg success rc-validation-msg-block">✅ ' + esc(_t('ui.config_import.valid')) + summary + '</div>';
         actions.style.display = '';
       } else {
         _cfgImportData = null;
@@ -767,13 +779,19 @@
 
   async function configImportReplace() {
     if (!_cfgImportData) return;
-    closeConfigImport(); draft = _cfgImportData; _cfgImportData = null; _cfgPreviewBackup = null;
+    const importedData = _cfgImportData;
+    _cfgImportData = null; _cfgPreviewBackup = null;
+    closeConfigImport();
+    draft = importedData;
     hidePreviewBadge(); populateForm(); updateJsonEditor(); await pushDraftAndRefresh();
   }
   function configImportPreview() {
     if (!_cfgImportData) return;
+    const importedData = _cfgImportData;
     _cfgPreviewBackup = JSON.parse(JSON.stringify(draft));
-    closeConfigImport(); draft = _cfgImportData; _cfgImportData = null;
+    _cfgImportData = null;
+    closeConfigImport();
+    draft = importedData;
     populateForm(); updateJsonEditor(); validateDraft(); showPreviewBadge();
   }
   function discardConfigPreview() {
@@ -801,7 +819,7 @@
   }
 
   async function exportHTML(){
-    const res = await fetch('/api/export/html');
+    const res = await fetch('/api/export/html',{headers:{'X-Requested-With':'XMLHttpRequest'}});
     const html = await res.text();
     const blob = new Blob([html],{type:'text/html'});
     const url = URL.createObjectURL(blob);

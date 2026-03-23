@@ -785,19 +785,20 @@ class TestGitLabDefaultBranch:
         assert result.name == "develop"
 
     @patch("releaseboard.git.gitlab_provider.GitLabProvider._get_json")
-    def test_returns_none_on_api_error(self, mock_get_json):
+    def test_raises_on_api_error(self, mock_get_json):
         """GIVEN a GitLabProvider with a 404 API response."""
         from releaseboard.git.gitlab_provider import GitLabProvider
+        from releaseboard.git.provider import GitAccessError, GitErrorKind
         mock_get_json.return_value = (None, 404)
         provider = GitLabProvider(token=None)
 
         """WHEN calling get_default_branch_info."""
-        result = provider.get_default_branch_info(
-            "https://gitlab.com/mygroup/myproject", timeout=10
-        )
-
-        """THEN it returns None."""
-        assert result is None
+        """THEN it raises GitAccessError with REPO_NOT_FOUND kind."""
+        with pytest.raises(GitAccessError) as exc_info:
+            provider.get_default_branch_info(
+                "https://gitlab.com/mygroup/myproject", timeout=10
+            )
+        assert exc_info.value.kind == GitErrorKind.REPO_NOT_FOUND
 
 
 class TestActiveConfigCaching:

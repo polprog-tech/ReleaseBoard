@@ -48,6 +48,11 @@ class SecurityHeadersMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        # Allow embedding in iframes when integrated into a portal shell.
+        # Set RELEASEBOARD_ALLOW_FRAMING=true to relax frame-ancestors.
+        self._allow_framing = os.getenv("RELEASEBOARD_ALLOW_FRAMING", "").lower() in (
+            "1", "true", "yes",
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -58,13 +63,17 @@ class SecurityHeadersMiddleware:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
                 headers["x-content-type-options"] = "nosniff"
-                headers["x-frame-options"] = "DENY"
+                if self._allow_framing:
+                    headers["x-frame-options"] = "SAMEORIGIN"
+                else:
+                    headers["x-frame-options"] = "DENY"
                 headers["referrer-policy"] = "strict-origin-when-cross-origin"
                 headers["permissions-policy"] = (
                     "camera=(), microphone=(), geolocation=()"
                 )
                 headers["x-xss-protection"] = "1; mode=block"
                 if "content-security-policy" not in headers:
+                    frame_policy = "'self'" if self._allow_framing else "'none'"
                     headers["content-security-policy"] = (
                         "default-src 'self'; "
                         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
@@ -73,7 +82,7 @@ class SecurityHeadersMiddleware:
                         "connect-src 'self' https://cdn.jsdelivr.net "
                         "https://fonts.googleapis.com https://fonts.gstatic.com; "
                         "font-src 'self' https://fonts.gstatic.com data:; "
-                        "frame-ancestors 'none'"
+                        f"frame-ancestors {frame_policy}"
                     )
             await send(message)
 
@@ -185,11 +194,13 @@ class RateLimitMiddleware:
 
 
 class CSRFMiddleware:
-    """CSRF protection via Origin header validation.
+    """CSRF protection via Origin header validation with defense-in-depth.
 
-    For state-changing requests (POST/PUT/DELETE), validates that the Origin
-    header matches the request Host. Requests without an Origin header are
-    allowed through (non-browser clients like curl or API tools).
+    For state-changing requests (POST/PUT/DELETE):
+    - If Origin is present: validates it matches the request Host.
+    - If Origin is absent: requires ``X-Requested-With: XMLHttpRequest``
+      header (which cannot be sent cross-origin without CORS preflight),
+      or validates the Referer header against the Host.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -224,6 +235,24 @@ class CSRFMiddleware:
                 )
                 await resp(scope, receive, send)
                 return
+        elif not origin:
+            # Defense-in-depth: require X-Requested-With for requests without Origin.
+            # Browsers cannot send this header cross-origin without CORS preflight.
+            xrw = _get_header(scope, "x-requested-with")
+            if xrw != "XMLHttpRequest" and not path.startswith("/api/health"):
+                # Fall back to Referer check for same-origin form submissions
+                referer = _get_header(scope, "referer")
+                if referer and host:
+                    if (
+                        not referer.startswith(f"http://{host}")
+                        and not referer.startswith(f"https://{host}")
+                    ):
+                        resp = JSONResponse(
+                            {"ok": False, "error": "CSRF validation failed"},
+                            status_code=403,
+                        )
+                        await resp(scope, receive, send)
+                        return
 
         await self.app(scope, receive, send)
 

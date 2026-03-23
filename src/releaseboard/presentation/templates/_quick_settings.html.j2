@@ -83,7 +83,7 @@
       /* Also sync header theme buttons if present */
       document.querySelectorAll('.theme-btn[data-theme]').forEach(function(x){x.classList.toggle('active',x.dataset.theme===t);});
       /* Persist theme choice to config */
-      fetch('/api/config/branding',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:t})}).catch(function(){});
+      fetch('/api/config/branding',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({theme:t})}).catch(function(){});
     });
   });
 
@@ -150,7 +150,7 @@
     if(titleEl)body.title=titleEl.value;
     if(subtitleEl)body.subtitle=subtitleEl.value;
     if(companyEl)body.company=companyEl.value;
-    fetch('/api/config/branding',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(d){
+    fetch('/api/config/branding',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(d){
       if(d.ok){
         /* Sync drawer color pickers if open */
         ['primary','secondary','tertiary'].forEach(function(role){

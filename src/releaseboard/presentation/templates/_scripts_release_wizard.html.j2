@@ -284,7 +284,7 @@
 
   async function _fetchRepoContext(repoName) {
     try {
-      const resp = await fetch(`/api/release-pilot/repo-context/${encodeURIComponent(repoName)}`);
+      const resp = await fetch(`/api/release-pilot/repo-context/${encodeURIComponent(repoName)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
       const data = await resp.json();
       if (!data.ok) {
         _showStepError(0, data.error || 'Failed to fetch repository context');
@@ -299,7 +299,7 @@
 
   async function _fetchCapabilities() {
     try {
-      const resp = await fetch('/api/release-pilot/capabilities');
+      const resp = await fetch('/api/release-pilot/capabilities',{headers:{'X-Requested-With':'XMLHttpRequest'}});
       const caps = await resp.json();
       if (!caps.ok) return;
 
@@ -462,7 +462,7 @@
     try {
       const resp = await fetch('/api/release-pilot/prepare', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: JSON.stringify(payload),
       });
       const data = await resp.json();

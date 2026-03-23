@@ -42,7 +42,7 @@ function showDetail(name){
   h+=dr(_t('ui.detail.expected'),'<code class="branch-name">'+esc(r.expectedBranch)+'</code>');
   if(r.branchExists){
     h+=dr(_t('ui.detail.actual'),'<code class="branch-name">'+esc(r.actualBranch)+'</code>');
-    h+=dr(_t('ui.detail.naming'),r.namingValid?'<span class="check-icon">✓ Valid</span>':'<span class="cross-icon">✗ Invalid</span>');
+    h+=dr(_t('ui.detail.naming'),r.namingValid?'<span class="check-icon">'+_t('ui.detail.valid')+'</span>':'<span class="cross-icon">'+_t('ui.detail.invalid')+'</span>');
   }else{
     h+=dr(_t('ui.detail.branch'),'<span class="text-muted">'+_t('ui.detail.not_found')+'</span>');
   }
@@ -57,7 +57,7 @@ function showDetail(name){
     h+=dr(_t('ui.detail.commit'),r.lastMessage||'—');
     h+=dr(_t('ui.detail.count'),r.commitCount);
     h+=dr(_t('ui.detail.freshness'),r.freshness);
-    h+=dr(_t('ui.detail.stale'),r.isStale?'<span class="cross-icon">⚠ Yes</span>':'<span class="check-icon">No</span>');
+    h+=dr(_t('ui.detail.stale'),r.isStale?'<span class="cross-icon">'+_t('ui.detail.stale_yes')+'</span>':'<span class="check-icon">'+_t('ui.detail.stale_no')+'</span>');
     h+='</div></div>';
   }
   // Metadata section
@@ -89,10 +89,10 @@ function showDetail(name){
   if(r.status==='missing_branch'&&!r.errorMessage){
     h+='<div class="detail-group"><div class="detail-group-title">'+_t('ui.detail.diagnostics')+'</div><div class="detail-grid">';
     h+=dr(_t('ui.detail.connectivity'),'<span class="check-icon">✓ '+_t('ui.detail.repo_reachable')+'</span>');
-    if(r.repoDefaultBranch)h+=dr(_t('ui.detail.default_branch'),'<code>'+esc(r.repoDefaultBranch)+'</code> detected');
+    if(r.repoDefaultBranch)h+=dr(_t('ui.detail.default_branch'),'<code>'+esc(r.repoDefaultBranch)+'</code> '+_t('ui.detail.detected'));
     h+=dr(_t('ui.detail.release_branch'),'<span class="cross-icon">✗ '+_t('ui.detail.not_found')+'</span>');
     h+=dr(_t('ui.detail.expected'),'<code>'+esc(r.expectedBranch)+'</code>');
-    const dsSrc=r.dataSource?(dsLabel[r.dataSource]||r.dataSource):'unknown';
+    const dsSrc=r.dataSource?(dsLabel[r.dataSource]||r.dataSource):_t('ui.detail.unknown_source');
     h+=dr(_t('ui.detail.data_source'),esc(dsSrc));
     h+=dr(_t('ui.detail.analysis'),_t('ui.detail.blocked_msg'));
     h+='</div></div>';

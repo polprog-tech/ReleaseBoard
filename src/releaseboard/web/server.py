@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +33,7 @@ from releaseboard.integrations.releasepilot.models import (
 from releaseboard.presentation.renderer import DashboardRenderer
 from releaseboard.presentation.view_models import build_dashboard_view_model
 from releaseboard.shared.logging import get_logger
+from releaseboard.web.cors import get_cors_origins
 from releaseboard.web.middleware import (
     APIKeyMiddleware,
     CSRFMiddleware,
@@ -70,13 +73,30 @@ class _InvalidJSONError(Exception):
         super().__init__(f"Invalid JSON: {detail}")
 
 
-def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
-    """Create the FastAPI application with all routes."""
+def create_app(
+    config_path: Path,
+    *,
+    first_run: bool = False,
+    root_path: str = "",
+) -> FastAPI:
+    """Create the FastAPI application with all routes.
+
+    Parameters
+    ----------
+    config_path:
+        Path to the ``releaseboard.json`` configuration file.
+    first_run:
+        When *True*, start with the first-run setup wizard.
+    root_path:
+        ASGI ``root_path`` for mounting behind a reverse proxy or inside
+        a portal shell (e.g. ``/tools/releaseboard``).
+    """
 
     app = FastAPI(
         title="ReleaseBoard",
         description="Release Readiness Dashboard",
         version=__version__,
+        root_path=root_path,
     )
 
     # --- Middleware Stack ---
@@ -87,9 +107,9 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=get_cors_origins(),
         allow_methods=["GET", "POST", "PUT"],
-        allow_headers=["*", "X-API-Key"],
+        allow_headers=["*", "X-API-Key", "X-Requested-With"],
         expose_headers=["Content-Disposition", "ETag"],
     )
     app.add_middleware(
@@ -105,7 +125,7 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
         state: AppState | None = None
     else:
         state = AppState(config_path)
-    git_provider = SmartGitProvider()
+    git_provider = SmartGitProvider(gitlab_token=os.environ.get("GITLAB_TOKEN") or None)
     service = AnalysisService(git_provider)
     release_pilot = ReleasePilotAdapter()
     _start_time = time.monotonic()
@@ -311,11 +331,13 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
             html = renderer.render(vm)
         except Exception as exc:
             logger.error("Dashboard template rendering failed: %s", exc)
+            _title = t("error.page_title", locale=locale) or "ReleaseBoard Error"
+            _heading = t("error.dashboard_rendering", locale=locale) or "Dashboard Rendering Error"
+            _body = t("error.check_logs", locale=locale) or "The dashboard could not be rendered. Please check the server logs for details."
             html = (
-                "<!DOCTYPE html><html><head><title>ReleaseBoard Error</title></head>"
-                "<body><h1>Dashboard Rendering Error</h1>"
-                "<p>The dashboard could not be rendered. "
-                "Please check the server logs for details.</p></body></html>"
+                f"<!DOCTYPE html><html><head><title>{_title}</title></head>"
+                f"<body><h1>{_heading}</h1>"
+                f"<p>{_body}</p></body></html>"
             )
         return HTMLResponse(html, headers={
             "Cache-Control": "no-store, no-cache, must-revalidate",
@@ -398,11 +420,19 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
         if errors:
             return JSONResponse({"ok": False, "errors": errors}, status_code=422)
 
-        # Write config file
-        config_path.write_text(
-            json.dumps(config_data, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+        # Write config file (atomic: temp + rename to avoid corruption on crash)
+        import tempfile as _tmpmod
+        json_text = json.dumps(config_data, indent=2, ensure_ascii=False) + "\n"
+        tmp_fd, tmp_name = _tmpmod.mkstemp(
+            dir=str(config_path.parent), suffix=".tmp",
         )
+        try:
+            with open(tmp_fd, "w", encoding="utf-8") as tmp_f:
+                tmp_f.write(json_text)
+            Path(tmp_name).replace(config_path)
+        except BaseException:
+            Path(tmp_name).unlink(missing_ok=True)
+            raise
 
         # Initialize app state and switch to normal mode
         state = AppState(config_path)
@@ -428,6 +458,11 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
         if state is None:
             return JSONResponse({"ok": False, "error": "No configuration loaded"}, status_code=503)
         body = await _read_json_body(request)
+        if not isinstance(body, dict):
+            return JSONResponse(
+                {"ok": False, "errors": ["Invalid payload: expected a JSON object"]},
+                status_code=400,
+            )
         errors = state.update_draft(body)
         return JSONResponse({
             "ok": len(errors) == 0,
@@ -481,6 +516,11 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
         """Validate config data against schema."""
         locale = _req_locale(request)
         body = await _read_json_body(request)
+        if not isinstance(body, dict):
+            return JSONResponse(
+                {"ok": False, "errors": ["Invalid payload: expected a JSON object"]},
+                status_code=400,
+            )
         errors = validate_config(body)
         errors += validate_layer_references(body)
         translated = [_translate_validation_error(e, locale) for e in errors]
@@ -585,7 +625,12 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
 
     @app.post("/api/analyze")
     async def trigger_analysis(request: Request) -> JSONResponse:
-        """Trigger a new analysis run."""
+        """Trigger a new analysis run.
+
+        Accepts optional ``github_token`` / ``gitlab_token`` in the JSON body.
+        When provided, the tokens are applied to the server-level git provider
+        (in memory only) so the analysis uses authenticated access.
+        """
         if state is None:
             return JSONResponse({"ok": False, "error": "No configuration loaded"}, status_code=503)
         locale = _req_locale(request)
@@ -594,6 +639,23 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
                 {"ok": False, "error": t("api.analysis_already_running", locale=locale)},
                 status_code=409,
             )
+
+        # Accept optional tokens from the request body
+        body: dict[str, Any] = {}
+        content_type = (request.headers.get("content-type") or "").lower()
+        if "application/json" in content_type:
+            try:
+                body = await _read_json_body(request)
+            except Exception:
+                body = {}
+
+        if isinstance(git_provider, SmartGitProvider) and body:
+            gh_tok = (body.get("github_token") or "").strip() or None
+            gl_tok = (body.get("gitlab_token") or "").strip() or None
+            if gh_tok or gl_tok:
+                git_provider.update_tokens(
+                    github_token=gh_tok, gitlab_token=gl_tok,
+                )
 
         async def _run() -> None:
             async with state.analysis_lock:
@@ -765,10 +827,13 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
             html = renderer.render(vm)
         except Exception as exc:
             logger.error("Export HTML template rendering failed: %s", exc)
+            _title = t("error.page_title", locale=locale) or "ReleaseBoard Error"
+            _heading = t("error.export_rendering", locale=locale) or "Export Rendering Error"
+            _body = t("error.export_check_logs", locale=locale) or "The dashboard could not be rendered for export."
             html = (
-                "<!DOCTYPE html><html><head><title>ReleaseBoard Error</title></head>"
-                "<body><h1>Export Rendering Error</h1>"
-                "<p>The dashboard could not be rendered for export.</p></body></html>"
+                f"<!DOCTYPE html><html><head><title>{_title}</title></head>"
+                f"<body><h1>{_heading}</h1>"
+                f"<p>{_body}</p></body></html>"
             )
         return HTMLResponse(
             html,
@@ -922,6 +987,13 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
         gitlab_token = (body.get("gitlab_token") or "").strip()
         warnings: list[str] = []
 
+        # Persist tokens in-memory for subsequent analysis runs
+        if isinstance(git_provider, SmartGitProvider) and (github_token or gitlab_token):
+            git_provider.update_tokens(
+                github_token=github_token or None,
+                gitlab_token=gitlab_token or None,
+            )
+
         github = GitHubProvider(token=github_token or None)
         gitlab = GitLabProvider(token=gitlab_token or None)
         result_layers: list[dict[str, Any]] = []
@@ -945,11 +1017,22 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
                 result_layers.append(layer_result)
                 continue
 
-            # Route to the right provider
+            # Route to the right provider — auto-detect from URL,
+            # falling back to the global provider_type hint.
             raw_repos: list[dict[str, Any]] = []
             branch_lister = None  # callable(repo_url, timeout) -> list[str]
 
-            if provider_type == "gitlab":
+            # Auto-detect: check hostname to decide provider.
+            # "github.com" → GitHub; "gitlab" in hostname → GitLab;
+            # otherwise use the global provider_type hint.
+            _host = (urlparse(root_url).hostname or "").lower()
+            url_is_github = "github.com" in _host
+            url_is_gitlab = "gitlab" in _host
+            use_gitlab = url_is_gitlab or (
+                provider_type == "gitlab" and not url_is_github
+            )
+
+            if use_gitlab:
                 parsed_gl = parse_gitlab_group(root_url)
                 if not parsed_gl:
                     warnings.append(
@@ -1082,9 +1165,11 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
 
         # Build request
         try:
+            repo_url = body["repo_url"].strip()
+            _git_token = git_provider.get_token_for_url(repo_url)
             prep_request = ReleasePrepRequest(
                 repo_name=body["repo_name"].strip(),
-                repo_url=body["repo_url"].strip(),
+                repo_url=repo_url,
                 release_title=body["release_title"].strip(),
                 release_version=body["release_version"].strip(),
                 from_ref=body.get("from_ref", "").strip(),
@@ -1102,6 +1187,7 @@ def create_app(config_path: Path, *, first_run: bool = False) -> FastAPI:
                 branch=body.get("branch", "").strip(),
                 since_date=body.get("since_date", "").strip(),
                 additional_notes=body.get("additional_notes", "").strip(),
+                git_token=_git_token,
             )
         except (KeyError, ValueError) as exc:
             return JSONResponse({
@@ -1347,5 +1433,6 @@ def _sse_format(event: str, data: Any) -> str:
     try:
         json_data = json.dumps(data, default=str)
     except Exception:
+        logger.warning("SSE data serialization failed for event '%s'", event, exc_info=True)
         json_data = json.dumps({"error": "serialization_failed"})
     return f"id: {event_id}\nevent: {event}\ndata: {json_data}\n\n"

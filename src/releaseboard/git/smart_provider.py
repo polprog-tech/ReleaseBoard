@@ -1,4 +1,4 @@
-"""Smart git provider — dispatches to GitHub API with git CLI fallback."""
+"""Smart git provider — dispatches to GitHub/GitLab API with git CLI fallback."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING
 
 from releaseboard.git.github_provider import GitHubProvider, parse_github_url
+from releaseboard.git.gitlab_provider import GitLabProvider, is_gitlab_url
 from releaseboard.git.local_provider import LocalGitProvider
 from releaseboard.git.provider import GitAccessError, GitErrorKind, GitProvider
 
@@ -26,112 +27,239 @@ _API_FAILURE_KINDS = frozenset({
 
 
 class SmartGitProvider(GitProvider):
-    """Routes requests to GitHubProvider for GitHub URLs, else LocalGitProvider.
+    """Routes requests to GitHubProvider/GitLabProvider for known hosts, else LocalGitProvider.
 
-    When the GitHub REST API is unavailable (rate-limited, network error, etc.),
+    When the REST API is unavailable (rate-limited, network error, etc.),
     automatically falls back to direct git CLI inspection (``git ls-remote``)
-    for public repositories. This ensures public repos remain analyzable even
+    for public repositories. This ensures repos remain analyzable even
     without API access.
 
-    After ``_API_RETRY_TTL`` seconds, the provider re-attempts the GitHub API
+    After ``_API_RETRY_TTL`` seconds, the provider re-attempts the REST API
     instead of staying permanently degraded.
     """
 
-    _API_RETRY_TTL = 300  # Re-check GitHub API availability after 5 minutes
+    _API_RETRY_TTL = 300  # Re-check API availability after 5 minutes
 
-    def __init__(self, github_token: str | None = None) -> None:
+    def __init__(
+        self,
+        github_token: str | None = None,
+        gitlab_token: str | None = None,
+    ) -> None:
         self._github = GitHubProvider(token=github_token)
+        self._gitlab = GitLabProvider(token=gitlab_token)
         self._local = LocalGitProvider()
+        # Separate availability tracking for GitHub and GitLab APIs
         self._github_api_available = True
-        self._api_unavailable_since: float | None = None
+        self._github_api_unavailable_since: float | None = None
+        self._gitlab_api_available = True
+        self._gitlab_api_unavailable_since: float | None = None
 
-    def _check_api_available(self) -> bool:
-        """Check if GitHub API should be attempted (with TTL-based reset)."""
-        if self._github_api_available:
+    @property
+    def gitlab_provider(self) -> GitLabProvider:
+        """Expose the authenticated GitLab provider for reuse (e.g. tag enrichment)."""
+        return self._gitlab
+
+    def get_token_for_url(self, url: str) -> str:
+        """Return the best available token for a given repository URL."""
+        low = url.lower()
+        if "github" in low:
+            return getattr(self._github, "token", "") or ""
+        if "gitlab" in low:
+            return self._gitlab.token
+        return ""
+
+    def update_tokens(
+        self,
+        *,
+        github_token: str | None = None,
+        gitlab_token: str | None = None,
+    ) -> None:
+        """Update provider tokens at runtime (e.g. when user supplies them via UI).
+
+        Only non-None values are applied; passing None leaves the existing token
+        unchanged.  Tokens are held in memory only — never persisted to disk.
+        """
+        if github_token is not None:
+            self._github = GitHubProvider(token=github_token or None)
+            # Reset availability so the new token gets a fresh chance
+            self._github_api_available = True
+            self._github_api_unavailable_since = None
+        if gitlab_token is not None:
+            self._gitlab = GitLabProvider(token=gitlab_token or None)
+            self._gitlab_api_available = True
+            self._gitlab_api_unavailable_since = None
+
+    def _check_api_available(self, provider: str) -> bool:
+        """Check if an API should be attempted (with TTL-based reset)."""
+        if provider == "github":
+            available = self._github_api_available
+            since = self._github_api_unavailable_since
+        else:
+            available = self._gitlab_api_available
+            since = self._gitlab_api_unavailable_since
+
+        if available:
             return True
-        if self._api_unavailable_since is not None:
-            elapsed = time.monotonic() - self._api_unavailable_since
+        if since is not None:
+            elapsed = time.monotonic() - since
             if elapsed >= self._API_RETRY_TTL:
-                self._github_api_available = True
-                self._api_unavailable_since = None
+                if provider == "github":
+                    self._github_api_available = True
+                    self._github_api_unavailable_since = None
+                else:
+                    self._gitlab_api_available = True
+                    self._gitlab_api_unavailable_since = None
                 logger.info(
-                    "Re-enabling GitHub API after %.0fs cooldown", elapsed,
+                    "Re-enabling %s API after %.0fs cooldown", provider, elapsed,
                 )
                 return True
         return False
 
-    def _mark_api_unavailable(self) -> None:
-        """Record that GitHub API is temporarily unavailable."""
-        self._github_api_available = False
-        self._api_unavailable_since = time.monotonic()
+    def _mark_api_unavailable(self, provider: str) -> None:
+        """Record that an API is temporarily unavailable."""
+        if provider == "github":
+            self._github_api_available = False
+            self._github_api_unavailable_since = time.monotonic()
+        else:
+            self._gitlab_api_available = False
+            self._gitlab_api_unavailable_since = time.monotonic()
 
     def _is_github(self, repo_url: str) -> bool:
         return parse_github_url(repo_url) is not None
 
-    def list_remote_branches(self, repo_url: str, timeout: int = 30) -> list[str]:
-        if not self._is_github(repo_url):
-            return self._local.list_remote_branches(repo_url, timeout)
+    def _is_gitlab(self, repo_url: str) -> bool:
+        return is_gitlab_url(repo_url)
 
+    def list_remote_branches(self, repo_url: str, timeout: int = 30) -> list[str]:
+        if self._is_github(repo_url):
+            return self._list_branches_github(repo_url, timeout)
+        if self._is_gitlab(repo_url):
+            return self._list_branches_gitlab(repo_url, timeout)
+        return self._local.list_remote_branches(repo_url, timeout)
+
+    def _list_branches_github(self, repo_url: str, timeout: int) -> list[str]:
         api_error: GitAccessError | None = None
-        if self._check_api_available():
+        if self._check_api_available("github"):
             try:
                 return self._github.list_remote_branches(repo_url, timeout)
             except GitAccessError as exc:
                 if exc.kind not in _API_FAILURE_KINDS:
-                    raise  # Repo-specific error — don't fall back
+                    raise
                 api_error = exc
-                self._mark_api_unavailable()
+                self._mark_api_unavailable("github")
                 logger.info(
                     "GitHub API unavailable (%s) for %s, falling back to git CLI",
                     exc.kind.value, repo_url,
                 )
 
-        # Fallback to git CLI (git ls-remote)
         try:
             return self._local.list_remote_branches(repo_url, timeout)
         except GitAccessError as local_exc:
-            # Both strategies failed — combine context
             api_detail = api_error.detail if api_error else "skipped (previously failed)"
             msg = f"GitHub API: {api_detail}; Git CLI: {local_exc.detail}"
+            raise GitAccessError(repo_url, msg, kind=local_exc.kind) from local_exc
+
+    def _list_branches_gitlab(self, repo_url: str, timeout: int) -> list[str]:
+        api_error: GitAccessError | None = None
+        if self._check_api_available("gitlab"):
+            try:
+                return self._gitlab.list_remote_branches(repo_url, timeout)
+            except GitAccessError as exc:
+                if exc.kind not in _API_FAILURE_KINDS:
+                    raise  # Repo-specific error (auth, not found) — don't fall back
+                api_error = exc
+                self._mark_api_unavailable("gitlab")
+                logger.info(
+                    "GitLab API unavailable (%s) for %s, falling back to git CLI",
+                    exc.kind.value, repo_url,
+                )
+
+        try:
+            return self._local.list_remote_branches(repo_url, timeout)
+        except GitAccessError as local_exc:
+            api_detail = api_error.detail if api_error else "skipped (previously failed)"
+            msg = f"GitLab API: {api_detail}; Git CLI: {local_exc.detail}"
             raise GitAccessError(repo_url, msg, kind=local_exc.kind) from local_exc
 
     def get_branch_info(
         self, repo_url: str, branch_name: str, timeout: int = 30
     ) -> BranchInfo | None:
-        if not self._is_github(repo_url):
-            return self._local.get_branch_info(repo_url, branch_name, timeout)
+        if self._is_github(repo_url):
+            return self._get_branch_info_github(repo_url, branch_name, timeout)
+        if self._is_gitlab(repo_url):
+            return self._get_branch_info_gitlab(repo_url, branch_name, timeout)
+        return self._local.get_branch_info(repo_url, branch_name, timeout)
 
-        if self._check_api_available():
+    def _get_branch_info_github(
+        self, repo_url: str, branch_name: str, timeout: int
+    ) -> BranchInfo | None:
+        if self._check_api_available("github"):
             try:
                 return self._github.get_branch_info(repo_url, branch_name, timeout)
             except GitAccessError as exc:
                 if exc.kind not in _API_FAILURE_KINDS:
                     raise
-                self._mark_api_unavailable()
+                self._mark_api_unavailable("github")
                 logger.info(
                     "GitHub API unavailable (%s) for branch info, using git CLI",
                     exc.kind.value,
                 )
+        return self._local.get_branch_info(repo_url, branch_name, timeout)
 
+    def _get_branch_info_gitlab(
+        self, repo_url: str, branch_name: str, timeout: int
+    ) -> BranchInfo | None:
+        if self._check_api_available("gitlab"):
+            try:
+                return self._gitlab.get_branch_info(repo_url, branch_name, timeout)
+            except GitAccessError as exc:
+                if exc.kind not in _API_FAILURE_KINDS:
+                    raise  # Auth/access/not-found — surface to caller
+                self._mark_api_unavailable("gitlab")
+                logger.info(
+                    "GitLab API unavailable (%s) for branch info, using git CLI",
+                    exc.kind.value,
+                )
         return self._local.get_branch_info(repo_url, branch_name, timeout)
 
     def get_default_branch_info(
         self, repo_url: str, timeout: int = 30
     ) -> BranchInfo | None:
-        """Get default branch info — tries GitHub API, then git CLI fallback."""
-        if not self._is_github(repo_url):
-            return self._local.get_default_branch_info(repo_url, timeout)
+        """Get default branch info — tries REST API, then git CLI fallback."""
+        if self._is_github(repo_url):
+            return self._get_default_branch_github(repo_url, timeout)
+        if self._is_gitlab(repo_url):
+            return self._get_default_branch_gitlab(repo_url, timeout)
+        return self._local.get_default_branch_info(repo_url, timeout)
 
-        if self._check_api_available():
+    def _get_default_branch_github(
+        self, repo_url: str, timeout: int
+    ) -> BranchInfo | None:
+        if self._check_api_available("github"):
             try:
                 return self._github.get_default_branch_info(repo_url, timeout)
             except GitAccessError as exc:
                 if exc.kind not in _API_FAILURE_KINDS:
                     raise
-                self._mark_api_unavailable()
+                self._mark_api_unavailable("github")
                 logger.info(
                     "GitHub API unavailable (%s) for default branch, using git CLI",
                     exc.kind.value,
                 )
+        return self._local.get_default_branch_info(repo_url, timeout)
 
+    def _get_default_branch_gitlab(
+        self, repo_url: str, timeout: int
+    ) -> BranchInfo | None:
+        if self._check_api_available("gitlab"):
+            try:
+                return self._gitlab.get_default_branch_info(repo_url, timeout)
+            except GitAccessError as exc:
+                if exc.kind not in _API_FAILURE_KINDS:
+                    raise
+                self._mark_api_unavailable("gitlab")
+                logger.info(
+                    "GitLab API unavailable (%s) for default branch, using git CLI",
+                    exc.kind.value,
+                )
         return self._local.get_default_branch_info(repo_url, timeout)

@@ -44,12 +44,12 @@
     setAnalysisPhase('starting');
     _sseReconnectAttempts = 0;
     connectSSE();
-    await fetch('/api/analyze',{method:'POST'});
+    await fetch('/api/analyze',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
   }
 
   async function stopAnalysis(){
     setAnalysisPhase('stopping');
-    await fetch('/api/analyze/cancel',{method:'POST'});
+    await fetch('/api/analyze/cancel',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
   }
 
   function handleProgress(p){

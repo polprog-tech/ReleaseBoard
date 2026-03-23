@@ -79,11 +79,59 @@ class GitLabProvider(GitProvider):
         self._token = token or os.environ.get("GITLAB_TOKEN", "")
         self._ssl_ctx: ssl.SSLContext | None = None
 
+    @property
+    def token(self) -> str:
+        """Return the current authentication token (may be empty)."""
+        return self._token
+
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
         if self._token:
             headers["PRIVATE-TOKEN"] = self._token
         return headers
+
+    def _raise_for_status(
+        self,
+        repo_url: str,
+        status: int,
+        body: Any,
+    ) -> None:
+        """Raise a properly classified GitAccessError from an HTTP failure."""
+        detail = ""
+        if isinstance(body, dict):
+            detail = body.get("message") or body.get("error") or ""
+            if isinstance(detail, dict):
+                detail = str(detail)
+
+        if status == 404:
+            raise GitAccessError(
+                repo_url,
+                f"Repository not found (HTTP 404). {detail}".strip(),
+                kind=GitErrorKind.REPO_NOT_FOUND,
+            )
+        if status == 401:
+            raise GitAccessError(
+                repo_url,
+                f"Authentication required (HTTP 401). {detail}".strip(),
+                kind=GitErrorKind.AUTH_REQUIRED,
+            )
+        if status == 403:
+            raise GitAccessError(
+                repo_url,
+                f"Access denied (HTTP 403). {detail}".strip(),
+                kind=GitErrorKind.ACCESS_DENIED,
+            )
+        if status == 0:
+            raise GitAccessError(
+                repo_url,
+                f"Cannot connect to GitLab API. {detail}".strip(),
+                kind=GitErrorKind.NETWORK_ERROR,
+            )
+        raise GitAccessError(
+            repo_url,
+            f"GitLab API error (HTTP {status}). {detail}".strip(),
+            kind=GitErrorKind.PROVIDER_UNAVAILABLE,
+        )
 
     @staticmethod
     def _ssl_context() -> ssl.SSLContext:
@@ -216,6 +264,8 @@ class GitLabProvider(GitProvider):
             )
             data, status = self._get_json(url, timeout)
             if status >= 400 or not isinstance(data, list):
+                if page == 1:
+                    self._raise_for_status(repo_url, status, data)
                 break
             if not data:
                 break
@@ -241,11 +291,13 @@ class GitLabProvider(GitProvider):
         url = f"{api_base}/projects/{encoded_project}/repository/branches/{encoded_branch}"
         data, status = self._get_json(url, timeout)
 
-        if status == 404 or not isinstance(data, dict):
+        if status == 404:
+            # Branch genuinely not found — not an auth/access error
             return BranchInfo(name=branch_name, exists=False, data_source="gitlab_api")
 
-        if status >= 400:
-            return BranchInfo(name=branch_name, exists=False, data_source="gitlab_api")
+        if status >= 400 or not isinstance(data, dict):
+            # Auth, access, or server error — raise so callers can distinguish
+            self._raise_for_status(repo_url, status, data)
 
         # Extract commit info
         commit = data.get("commit") if isinstance(data.get("commit"), dict) else {}
@@ -285,10 +337,29 @@ class GitLabProvider(GitProvider):
         project_url = f"{api_base}/projects/{encoded_project}"
         data, status = self._get_json(project_url, timeout)
         if status >= 400 or not isinstance(data, dict):
-            return None
+            self._raise_for_status(repo_url, status, data)
 
         default_branch = data.get("default_branch", "main")
-        return self.get_branch_info(repo_url, default_branch, timeout)
+        repo_visibility = data.get("visibility", "")
+        repo_description = data.get("description") or ""
+        repo_web_url = data.get("web_url", "")
+
+        branch_info = self.get_branch_info(repo_url, default_branch, timeout)
+        if branch_info and branch_info.exists:
+            return BranchInfo(
+                name=branch_info.name,
+                exists=True,
+                last_commit_date=branch_info.last_commit_date,
+                last_commit_author=branch_info.last_commit_author,
+                last_commit_message=branch_info.last_commit_message,
+                last_commit_sha=branch_info.last_commit_sha,
+                repo_default_branch=default_branch,
+                repo_visibility=repo_visibility,
+                repo_description=repo_description,
+                repo_web_url=repo_web_url,
+                data_source="gitlab_api",
+            )
+        return branch_info
 
     # ------------------------------------------------------------------
     # Tag enrichment — latest tag relevant to a specific branch

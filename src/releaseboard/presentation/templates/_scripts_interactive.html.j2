@@ -12,11 +12,11 @@ const RB = (function(){
   let eventSource = null;
 
   async function init(){
-    const res = await fetch('/api/config');
+    const res = await fetch('/api/config',{headers:{'X-Requested-With':'XMLHttpRequest'}});
     const data = await res.json();
     draft = data.draft;
     updateUnsavedBadge(data.has_unsaved_changes);
-    const sRes = await fetch('/api/config/schema');
+    const sRes = await fetch('/api/config/schema',{headers:{'X-Requested-With':'XMLHttpRequest'}});
     const sData = await sRes.json();
     schema = sData.schema || sData;
     populateForm();
@@ -62,7 +62,9 @@ const RB = (function(){
 (function(){
   var params = new URLSearchParams(window.location.search);
   if (params.get('open_wizard') === '1' && typeof RB !== 'undefined' && RB.openWizard) {
-    history.replaceState(null, '', window.location.pathname);
+    params.delete('open_wizard');
+    var clean = params.toString();
+    history.replaceState(null, '', window.location.pathname + (clean ? '?' + clean : ''));
     setTimeout(function(){ RB.openWizard(); }, 300);
   }
 })();

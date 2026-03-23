@@ -33,32 +33,37 @@ class TestSmartProviderTTL:
         provider = SmartGitProvider()
 
         """WHEN checking initial API availability."""
-        available = provider._check_api_available()
+        gh_available = provider._check_api_available("github")
+        gl_available = provider._check_api_available("gitlab")
 
-        """THEN the API is reported as available."""
+        """THEN both APIs are reported as available."""
         assert provider._github_api_available is True
-        assert available is True
+        assert provider._gitlab_api_available is True
+        assert gh_available is True
+        assert gl_available is True
 
     def test_mark_unavailable_sets_timestamp(self):
         """GIVEN a freshly created SmartGitProvider."""
         from releaseboard.git.smart_provider import SmartGitProvider
         provider = SmartGitProvider()
 
-        """WHEN the API is marked unavailable."""
-        provider._mark_api_unavailable()
+        """WHEN the GitHub API is marked unavailable."""
+        provider._mark_api_unavailable("github")
 
         """THEN the flag is False and the timestamp is set."""
         assert provider._github_api_available is False
-        assert provider._api_unavailable_since is not None
+        assert provider._github_api_unavailable_since is not None
+        # GitLab should be unaffected
+        assert provider._gitlab_api_available is True
 
     def test_api_stays_unavailable_within_ttl(self):
         """GIVEN a SmartGitProvider with a recently unavailable API."""
         from releaseboard.git.smart_provider import SmartGitProvider
         provider = SmartGitProvider()
-        provider._mark_api_unavailable()
+        provider._mark_api_unavailable("github")
 
         """WHEN checking availability within the TTL window."""
-        available = provider._check_api_available()
+        available = provider._check_api_available("github")
 
         """THEN the API is still reported as unavailable."""
         assert available is False
@@ -67,18 +72,32 @@ class TestSmartProviderTTL:
         """GIVEN a SmartGitProvider whose TTL has expired."""
         from releaseboard.git.smart_provider import SmartGitProvider
         provider = SmartGitProvider()
-        provider._mark_api_unavailable()
-        provider._api_unavailable_since = (
+        provider._mark_api_unavailable("github")
+        provider._github_api_unavailable_since = (
             time.monotonic() - provider._API_RETRY_TTL - 1
         )
 
         """WHEN checking availability after TTL expiration."""
-        available = provider._check_api_available()
+        available = provider._check_api_available("github")
 
         """THEN the API resets to available."""
         assert available is True
         assert provider._github_api_available is True
-        assert provider._api_unavailable_since is None
+        assert provider._github_api_unavailable_since is None
+
+    def test_gitlab_ttl_independent(self):
+        """GIVEN a SmartGitProvider with GitLab API marked unavailable."""
+        from releaseboard.git.smart_provider import SmartGitProvider
+        provider = SmartGitProvider()
+        provider._mark_api_unavailable("gitlab")
+
+        """WHEN checking GitHub availability."""
+        gh_available = provider._check_api_available("github")
+        gl_available = provider._check_api_available("gitlab")
+
+        """THEN GitHub is still available, GitLab is not."""
+        assert gh_available is True
+        assert gl_available is False
 
 
 class TestGitProviderRetry:

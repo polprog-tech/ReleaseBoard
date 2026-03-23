@@ -363,6 +363,7 @@ a:hover { text-decoration: underline; }
   font-size: 12px;
   color: var(--text-tertiary);
   margin-top: 8px;
+  margin-bottom: 15px;
   line-height: 1.5;
 }
 
@@ -568,18 +569,18 @@ a:hover { text-decoration: underline; }
           <div class="fr-form-group">
             <label class="fr-label" for="targetMonth" data-i18n="first_run.target_month">Target Month</label>
             <select class="fr-select" id="targetMonth">
-              <option value="1">January</option>
-              <option value="2">February</option>
-              <option value="3">March</option>
-              <option value="4">April</option>
-              <option value="5">May</option>
-              <option value="6">June</option>
-              <option value="7">July</option>
-              <option value="8">August</option>
-              <option value="9">September</option>
-              <option value="10">October</option>
-              <option value="11">November</option>
-              <option value="12">December</option>
+              <option value="1" data-i18n="rc.month.jan">January</option>
+              <option value="2" data-i18n="rc.month.feb">February</option>
+              <option value="3" data-i18n="rc.month.mar">March</option>
+              <option value="4" data-i18n="rc.month.apr">April</option>
+              <option value="5" data-i18n="rc.month.may">May</option>
+              <option value="6" data-i18n="rc.month.jun">June</option>
+              <option value="7" data-i18n="rc.month.jul">July</option>
+              <option value="8" data-i18n="rc.month.aug">August</option>
+              <option value="9" data-i18n="rc.month.sep">September</option>
+              <option value="10" data-i18n="rc.month.oct">October</option>
+              <option value="11" data-i18n="rc.month.nov">November</option>
+              <option value="12" data-i18n="rc.month.dec">December</option>
             </select>
           </div>
           <div class="fr-form-group">
@@ -702,6 +703,18 @@ a:hover { text-decoration: underline; }
       'ui.theme.midnight': 'Midnight',
       'ui.footer.all_rights': 'All rights reserved.',
       'ui.footer.built_with': 'Dashboard built with',
+      'rc.month.jan': 'January',
+      'rc.month.feb': 'February',
+      'rc.month.mar': 'March',
+      'rc.month.apr': 'April',
+      'rc.month.may': 'May',
+      'rc.month.jun': 'June',
+      'rc.month.jul': 'July',
+      'rc.month.aug': 'August',
+      'rc.month.sep': 'September',
+      'rc.month.oct': 'October',
+      'rc.month.nov': 'November',
+      'rc.month.dec': 'December',
     },
     pl: {
       'first_run.title': 'Witaj w ReleaseBoard',
@@ -738,6 +751,18 @@ a:hover { text-decoration: underline; }
       'ui.theme.midnight': 'P\u00f3\u0142noc',
       'ui.footer.all_rights': 'Wszelkie prawa zastrze\u017cone.',
       'ui.footer.built_with': 'Dashboard zbudowany z',
+      'rc.month.jan': 'Stycze\u0144',
+      'rc.month.feb': 'Luty',
+      'rc.month.mar': 'Marzec',
+      'rc.month.apr': 'Kwiecie\u0144',
+      'rc.month.may': 'Maj',
+      'rc.month.jun': 'Czerwiec',
+      'rc.month.jul': 'Lipiec',
+      'rc.month.aug': 'Sierpie\u0144',
+      'rc.month.sep': 'Wrzesie\u0144',
+      'rc.month.oct': 'Pa\u017adziernik',
+      'rc.month.nov': 'Listopad',
+      'rc.month.dec': 'Grudzie\u0144',
     }
   };
 
@@ -827,7 +852,8 @@ a:hover { text-decoration: underline; }
 
   /* ── Form defaults ── */
   var now = new Date();
-  var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var _monthKeys = ['rc.month.jan','rc.month.feb','rc.month.mar','rc.month.apr','rc.month.may','rc.month.jun','rc.month.jul','rc.month.aug','rc.month.sep','rc.month.oct','rc.month.nov','rc.month.dec'];
+  var monthNames = _monthKeys.map(function(k){ return getText(k); });
   document.getElementById('releaseName').value = monthNames[now.getMonth()] + ' ' + now.getFullYear() + ' Release';
   document.getElementById('targetMonth').value = String(now.getMonth() + 1);
   document.getElementById('targetYear').value = String(now.getFullYear());
@@ -835,7 +861,7 @@ a:hover { text-decoration: underline; }
   var selectedExample = null;
 
   /* ── Load examples ── */
-  fetch('/api/examples')
+  fetch('/api/examples',{headers:{'X-Requested-With':'XMLHttpRequest'}})
     .then(function(r) { return r.json(); })
     .then(function(data) {
       var list = document.getElementById('examplesList');
@@ -881,7 +907,7 @@ a:hover { text-decoration: underline; }
     try {
       var res = await fetch('/api/config/create', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify({
           mode: 'empty',
           release_name: document.getElementById('releaseName').value,
@@ -913,7 +939,7 @@ a:hover { text-decoration: underline; }
     try {
       var res = await fetch('/api/config/create', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify({
           mode: 'empty',
           release_name: monthNames[now.getMonth()] + ' ' + now.getFullYear() + ' Release',
@@ -946,7 +972,7 @@ a:hover { text-decoration: underline; }
     try {
       var res = await fetch('/api/config/create', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify({ mode: 'example', example: selectedExample })
       });
       var data = await res.json();
@@ -979,7 +1005,7 @@ a:hover { text-decoration: underline; }
     try {
       var res = await fetch('/api/config/create', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify({ mode: 'import', config: parsed })
       });
       var data = await res.json();

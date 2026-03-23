@@ -691,7 +691,7 @@
   // ======================== LOAD FROM SERVER ========================
 
   function _loadFromServer() {
-    return fetch('/api/release-calendar').then(function(r) { return r.json(); }).then(function(data) {
+    return fetch('/api/release-calendar',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(r) { return r.json(); }).then(function(data) {
       return data;
     }).catch(function() { return null; });
   }
@@ -722,7 +722,7 @@
           onClick: function() {
             fetch('/api/release-calendar', {
               method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
               body: JSON.stringify({})
             }).then(function(r){ return r.json(); }).then(function(res){
               if(res.ok) window.location.reload();

@@ -71,6 +71,11 @@ class GitHubProvider(GitProvider):
         self._session = None
         self._ssl_ctx: ssl.SSLContext | None = None
 
+    @property
+    def token(self) -> str:
+        """Return the current authentication token (may be empty)."""
+        return self._token
+
     def _headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/vnd.github+json",

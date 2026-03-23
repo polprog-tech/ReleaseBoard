@@ -6,7 +6,7 @@
         title: _t('ui.config.unsaved_title'),
         desc: _t('ui.config.unsaved_close_warning'),
         buttons: [
-          { label: 'Save & Close', cls:'primary', onClick: function(){ closeModal(); RB.saveConfig(); } },
+          { label: _t('ui.config.save_close'), cls:'primary', onClick: function(){ closeModal(); RB.saveConfig(); } },
           { label: _t('ui.config.discard_close'), cls:'danger', onClick: function(){ closeModal(); _hasUnsavedChanges=false; updateUnsavedBadge(false); if (_drawerSnapshot) draft = JSON.parse(_drawerSnapshot); populateForm(); updateJsonEditor(); RB.closeDrawer(); } },
           { label: _t('ui.cancel'), cls:'cancel', onClick: function(){ closeModal(); } }
         ]
@@ -176,7 +176,7 @@
       if(idSpan) openIds.add(idSpan.textContent);
     });
     container.innerHTML = layers.map((l,i)=>{
-      const effectiveRoot = l.repository_root_url || globalRoot || '(none)';
+      const effectiveRoot = l.repository_root_url || globalRoot || _t('ui.config.none_fallback');
       const effectiveBranch = l.branch_pattern || globalBranch;
       const branchInherited = !l.branch_pattern;
       const branchTag = branchInherited
@@ -193,17 +193,17 @@
         <button class="remove-btn" onclick="RB.removeLayer(${i})">✕</button>
         <div class="cfg-list-item-body">
         <div class="cfg-row">
-          <div class="cfg-field"><label class="cfg-label">ID</label><input class="cfg-input text-mono" data-path="layers.${i}.id" value="${l.id||''}" readonly></div>
-          <div class="cfg-field"><label class="cfg-label">Label</label><input class="cfg-input" data-path="layers.${i}.label" value="${l.label||''}" onchange="RB.updateLayer(${i},'label',this.value);RB.renderLayers();RB.renderRepos()"></div>
+          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.id_label')}</label><input class="cfg-input text-mono" data-path="layers.${i}.id" value="${l.id||''}" readonly></div>
+          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.label_label')}</label><input class="cfg-input" data-path="layers.${i}.label" value="${l.label||''}" onchange="RB.updateLayer(${i},'label',this.value);RB.renderLayers();RB.renderRepos()"></div>
         </div>
         <div class="cfg-row">
-          <div class="cfg-field"><label class="cfg-label">Branch Pattern</label><input class="cfg-input text-mono${branchInherited ? ' cfg-inherited' : ''}" data-path="layers.${i}.branch_pattern" value="${l.branch_pattern || globalBranch}" placeholder="(uses global: ${esc(globalBranch)})" oninput="RB.onLayerBranchInput(${i},this)" onchange="RB.updateLayer(${i},'branch_pattern',this.value||undefined);RB.renderLayers();RB.renderRepos()"><div class="effective-value">\u2192 ${esc(effectiveBranch)} ${branchTag}</div></div>
-          <div class="cfg-field cfg-flex-auto"><label class="cfg-label">Color</label><input class="cfg-input cfg-color" data-path="layers.${i}.color" type="color" value="${l.color||'#4F46E5'}" onchange="RB.updateLayer(${i},'color',this.value);RB.renderLayers()"></div>
-          <div class="cfg-field cfg-flex-72"><label class="cfg-label">Order</label><input class="cfg-input" data-path="layers.${i}.order" type="number" min="0" value="${l.order||i}" onchange="RB.updateLayer(${i},'order',Math.max(0,parseInt(this.value)||0))"></div>
+          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.branch_pattern')}</label><input class="cfg-input text-mono${branchInherited ? ' cfg-inherited' : ''}" data-path="layers.${i}.branch_pattern" value="${l.branch_pattern || globalBranch}" placeholder="${_t('ui.config.uses_global').replace('{url}', esc(globalBranch))}" oninput="RB.onLayerBranchInput(${i},this)" onchange="RB.updateLayer(${i},'branch_pattern',this.value||undefined);RB.renderLayers();RB.renderRepos()"><div class="effective-value">\u2192 ${esc(effectiveBranch)} ${branchTag}</div></div>
+          <div class="cfg-field cfg-flex-auto"><label class="cfg-label">${_t('ui.config.color')}</label><input class="cfg-input cfg-color" data-path="layers.${i}.color" type="color" value="${l.color||'#4F46E5'}" onchange="RB.updateLayer(${i},'color',this.value);RB.renderLayers()"></div>
+          <div class="cfg-field cfg-flex-72"><label class="cfg-label">${_t('ui.config.order_label')}</label><input class="cfg-input" data-path="layers.${i}.order" type="number" min="0" value="${l.order||i}" onchange="RB.updateLayer(${i},'order',Math.max(0,parseInt(this.value)||0))"></div>
         </div>
         <div class="cfg-field">
-          <label class="cfg-label">Repository Root URL</label><span class="cfg-tooltip-trigger" tabindex="0" data-tooltip="${esc(_t('ui.config.repo_root_url_tooltip'))}">?</span>
-          <input class="cfg-input text-mono" data-path="layers.${i}.repository_root_url" value="${l.repository_root_url||''}" placeholder="(uses global root)" onchange="RB.updateLayer(${i},'repository_root_url',this.value||undefined)">
+          <label class="cfg-label">${_t('ui.config.repo_root_url')}</label><span class="cfg-tooltip-trigger" tabindex="0" data-tooltip="${esc(_t('ui.config.repo_root_url_tooltip'))}">?</span>
+          <input class="cfg-input text-mono" data-path="layers.${i}.repository_root_url" value="${l.repository_root_url||''}" placeholder="${_t('ui.config.uses_global_root')}" onchange="RB.updateLayer(${i},'repository_root_url',this.value||undefined)">
           <div class="cfg-help">${_t('ui.config.repo_root_url_formats')}</div>
           <div class="effective-value">\u2192 ${esc(effectiveRoot)}</div>
         </div>
@@ -328,15 +328,15 @@
         </div>
         <div class="repo-accordion-body">
           <div class="cfg-row">
-            <div class="cfg-field"><label class="cfg-label">Name<span class="required-star">*</span> ${nameIndicator}</label><input class="cfg-input" data-path="repositories.${i}.name" value="${r.name||''}" onchange="RB.updateRepoName(${i},this.value)" oninput="RB.clearDraftFlag(${i})"></div>
-            <div class="cfg-field"><label class="cfg-label">Layer</label><select class="cfg-select" data-path="repositories.${i}.layer" onchange="RB.updateRepo(${i},'layer',this.value);RB.renderRepos()">${layerOpts.replace('value="'+r.layer+'"','value="'+r.layer+'" selected')}</select></div>
+            <div class="cfg-field"><label class="cfg-label">${_t('ui.config.name_label')}<span class="required-star">*</span> ${nameIndicator}</label><input class="cfg-input" data-path="repositories.${i}.name" value="${r.name||''}" onchange="RB.updateRepoName(${i},this.value)" oninput="RB.clearDraftFlag(${i})"></div>
+            <div class="cfg-field"><label class="cfg-label">${_t('ui.config.layer_label')}</label><select class="cfg-select" data-path="repositories.${i}.layer" onchange="RB.updateRepo(${i},'layer',this.value);RB.renderRepos()">${layerOpts.replace('value="'+r.layer+'"','value="'+r.layer+'" selected')}</select></div>
           </div>
-          <div class="cfg-field"><label class="cfg-label">URL / Slug<span class="required-star">*</span></label><input class="cfg-input text-mono" data-path="repositories.${i}.url" value="${r.url||''}" oninput="RB.autoFillRepoName(${i},this.value);RB.clearDraftFlag(${i})" onchange="RB.updateRepo(${i},'url',this.value);RB.autoFillRepoName(${i},this.value)"><div class="cfg-help">${_t('ui.config.url_field_help')}</div><div class="effective-value">\u2192 ${esc(effUrl)}</div></div>
+          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.url_slug_label')}<span class="required-star">*</span></label><input class="cfg-input text-mono" data-path="repositories.${i}.url" value="${r.url||''}" oninput="RB.autoFillRepoName(${i},this.value);RB.clearDraftFlag(${i})" onchange="RB.updateRepo(${i},'url',this.value);RB.autoFillRepoName(${i},this.value)"><div class="cfg-help">${_t('ui.config.url_field_help')}</div><div class="effective-value">\u2192 ${esc(effUrl)}</div></div>
           <div class="cfg-row">
-            <div class="cfg-field"><label class="cfg-label">Branch Pattern</label><input class="cfg-input text-mono${!hasRepoOverride ? ' cfg-inherited' : ''}" data-path="repositories.${i}.branch_pattern" value="${hasRepoOverride ? r.branch_pattern : (layerPat || globalPat)}" placeholder="${esc(branchPlaceholder || effBranch)}" onchange="RB.updateRepo(${i},'branch_pattern',this.value||undefined);RB.renderRepos()"><div class="effective-value">\u2192 ${esc(effBranch)} ${branchTag}</div></div>
-            <div class="cfg-field"><label class="cfg-label">Default Branch</label><input class="cfg-input" data-path="repositories.${i}.default_branch" value="${r.default_branch||'main'}" onchange="RB.updateRepo(${i},'default_branch',this.value)"></div>
+            <div class="cfg-field"><label class="cfg-label">${_t('ui.config.branch_pattern')}</label><input class="cfg-input text-mono${!hasRepoOverride ? ' cfg-inherited' : ''}" data-path="repositories.${i}.branch_pattern" value="${hasRepoOverride ? r.branch_pattern : (layerPat || globalPat)}" placeholder="${esc(branchPlaceholder || effBranch)}" onchange="RB.updateRepo(${i},'branch_pattern',this.value||undefined);RB.renderRepos()"><div class="effective-value">\u2192 ${esc(effBranch)} ${branchTag}</div></div>
+            <div class="cfg-field"><label class="cfg-label">${_t('ui.config.default_branch_label')}</label><input class="cfg-input" data-path="repositories.${i}.default_branch" value="${r.default_branch||'main'}" onchange="RB.updateRepo(${i},'default_branch',this.value)"></div>
           </div>
-          <div class="cfg-field"><label class="cfg-label">Notes</label><input class="cfg-input" data-path="repositories.${i}.notes" value="${r.notes||''}" onchange="RB.updateRepo(${i},'notes',this.value||undefined)"></div>
+          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.notes_label')}</label><input class="cfg-input" data-path="repositories.${i}.notes" value="${r.notes||''}" onchange="RB.updateRepo(${i},'notes',this.value||undefined)"></div>
         </div>
       </div>`;
     }
@@ -344,21 +344,21 @@
     let html = '';
     layers.forEach(l=>{
       const entries = grouped[l.id] || [];
-      const layerRoot = l.repository_root_url || globalRoot || '(none)';
+      const layerRoot = l.repository_root_url || globalRoot || _t('ui.config.none_fallback');
       const layerHasChanges = isLayerChanged(l.id) || entries.some(e=>isRepoChanged(e.idx));
       const layerDraftCls = layerHasChanges ? ' draft' : '';
       const layerDraftBadge = layerHasChanges ? '<span class="draft-badge">'+_t('ui.draft')+'</span>' : '';
       html += `<div class="cfg-layer-group${layerDraftCls}">
         <div class="cfg-layer-group-header">
           <span class="layer-color-dot" style="background:${l.color||'#6366F1'};"></span>
-          ${esc(l.label||l.id)} (${entries.length} repo${entries.length===1?'':'s'}) ${layerDraftBadge}
+          ${esc(l.label||l.id)} (${_tp('ui.config.repo_count', entries.length)}) ${layerDraftBadge}
           <span class="layer-root-hint" title="${esc(layerRoot)}">${esc(layerRoot)}</span>
           <button class="layer-group-delete" onclick="RB.removeLayerById('${esc(l.id)}')" title="${_t('ui.config.delete_layer')}">✕</button>
         </div>
         <div class="cfg-layer-group-repos">
           ${entries.map(e=>renderRepoAccordion(e.repo, e.idx)).join('')}
         </div>
-        <button class="cfg-add-btn" onclick="RB.addRepo('${l.id}')">+ Add to ${esc(l.label||l.id)}</button>
+        <button class="cfg-add-btn" onclick="RB.addRepo('${l.id}')">${_t('ui.config.add_to_layer').replace('{layer}', esc(l.label||l.id))}</button>
       </div>`;
     });
 
@@ -366,7 +366,7 @@
       html += `<div class="cfg-layer-group">
         <div class="cfg-layer-group-header">
           <span class="layer-color-dot" style="background:#9CA3AF;"></span>
-          ${_t('ui.config.unassigned')} (${ungrouped.length} repo${ungrouped.length===1?'':'s'})
+          ${_t('ui.config.unassigned')} (${_tp('ui.config.repo_count', ungrouped.length)})
         </div>
         <div class="cfg-layer-group-repos">
           ${ungrouped.map(e=>renderRepoAccordion(e.repo, e.idx)).join('')}
@@ -374,7 +374,7 @@
       </div>`;
     }
 
-    html += '<button class="cfg-add-btn cfg-add-btn-spaced" onclick="RB.addRepo()">+ Add Repository</button>';
+    html += '<button class="cfg-add-btn cfg-add-btn-spaced" onclick="RB.addRepo()">' + _t('ui.config.add_repo') + '</button>';
     container.innerHTML = html;
     // Restore open accordion state after re-render
     openIdxs.forEach(idx=>{
@@ -507,8 +507,8 @@
 
   /* --- Push draft to server and re-analyze to update dashboard --- */
   async function pushDraftAndRefresh(){
-    await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cleanDraft(draft))});
-    const res = await fetch('/api/config/save',{method:'POST'});
+    await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(cleanDraft(draft))});
+    const res = await fetch('/api/config/save',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
     const data = await res.json();
     if(!data.ok){
       showSaveErrors(data.errors);

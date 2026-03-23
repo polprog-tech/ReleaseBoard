@@ -238,7 +238,7 @@
     const idx = WIZ.layers.length;
     WIZ.layers.push({
       id: 'layer' + (idx + 1),
-      label: 'Layer ' + (idx + 1),
+      label: _t('ui.wizard.default_layer').replace('{n}', idx + 1),
       color: WIZ_COLORS[idx % WIZ_COLORS.length],
       root_url: '',
     });
@@ -301,7 +301,7 @@
     try {
       const resp = await fetch('/api/discover', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: JSON.stringify({
           layers: WIZ.layers.filter(l => l.root_url.trim()),
           branch_pattern: draft.branch_pattern || 'release/{YYYY}.{MM}',
@@ -479,7 +479,7 @@
     try {
       const putRes = await fetch('/api/config', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: JSON.stringify(cleanDraft(draft)),
       });
       const putData = await putRes.json();
@@ -488,18 +488,18 @@
           title: _t('ui.error.validation_error'),
           desc: _t('ui.error.config_has_errors'),
           details: '<ul class="wiz-error-list">' + (putData.errors || []).map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>',
-          buttons: [{ label: 'OK', cls: 'cancel' }]
+          buttons: [{ label: _t('ui.wizard.ok_btn'), cls: 'cancel' }]
         });
         return;
       }
-      const saveRes = await fetch('/api/config/save', { method: 'POST' });
+      const saveRes = await fetch('/api/config/save', { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} });
       const saveData = await saveRes.json();
       if (!saveData.ok) {
         showModal({
           title: _t('ui.error.save_error'),
           desc: _t('ui.error.save_failed'),
           details: '<ul class="wiz-error-list">' + (saveData.errors || []).map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>',
-          buttons: [{ label: 'OK', cls: 'cancel' }]
+          buttons: [{ label: _t('ui.wizard.ok_btn'), cls: 'cancel' }]
         });
         return;
       }
@@ -509,7 +509,7 @@
       showModal({
         title: _t('ui.error.save_error'),
         desc: _t('ui.error.unexpected', {message: esc(err.message)}),
-        buttons: [{ label: 'OK', cls: 'cancel' }]
+        buttons: [{ label: _t('ui.wizard.ok_btn'), cls: 'cancel' }]
       });
     }
   }

@@ -87,6 +87,8 @@ Plan and visualize your release schedule with the built-in calendar wizard — s
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Web Server Mode](#web-server-mode)
+- [API Endpoints](#api-endpoints)
 - [Screenshots](#screenshots)
 - [Features](#features)
 - [Configuration](#configuration)
@@ -94,6 +96,7 @@ Plan and visualize your release schedule with the built-in calendar wizard — s
 - [Dashboard](#dashboard)
 - [Architecture](#architecture)
 - [ReleasePilot Integration](#releasepilot-integration)
+- [OpsPortal Integration](#opsportal-integration)
 - [GitLab CI/CD](#gitlab-cicd)
 - [Testing](#testing)
 - [Documentation](#documentation)
@@ -150,6 +153,59 @@ open output/dashboard.html
 releaseboard serve --config releaseboard.json
 # → Open http://127.0.0.1:8080
 ```
+
+## Web Server Mode
+
+The web server is the **primary operating mode**. Start it with:
+
+```bash
+releaseboard serve                                    # defaults: 127.0.0.1:8080
+releaseboard serve --port 9000 --host 0.0.0.0         # custom bind
+releaseboard serve --config path/to/config.json        # custom config
+releaseboard serve --verbose                           # debug logging
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--config` | `-c` | `releaseboard.json` | Path to configuration file |
+| `--host` | `-h` | `127.0.0.1` | Bind address |
+| `--port` | `-p` | `8080` | Bind port |
+| `--verbose` | `-v` | — | Enable debug logging |
+
+**First run:** When no configuration file exists, the server automatically presents a guided setup wizard.
+
+For programmatic usage or ASGI deployment:
+
+```python
+from releaseboard.web.server import create_app
+
+app = create_app(
+    config_path="releaseboard.json",
+    first_run=False,
+    root_path="",
+)
+```
+
+Use `root_path` when deploying behind a reverse proxy or embedding inside OpsPortal.
+
+## API Endpoints
+
+ReleaseBoard exposes 34 HTTP routes covering health monitoring, configuration management, analysis execution, export, and integrations.
+
+**Health & Status**
+- `GET /health/live` — liveness probe
+- `GET /health/ready` — readiness probe
+- `GET /api/status` — deep health status
+
+**Configuration** — full CRUD with draft/save/reset workflow, JSON Schema validation, import/export, and branding overrides.
+
+**Analysis** — trigger analysis runs, cancel in-progress analysis, stream real-time progress via SSE, and retrieve results.
+
+**Export & Discovery** — static HTML export, repository discovery from root URLs.
+
+**Integrations** — ReleasePilot capabilities, validation, and preparation endpoints; release calendar management.
+
+See [docs/usage.md](docs/usage.md) for the full endpoint reference and examples.
 
 ## Features
 
@@ -389,6 +445,19 @@ See [`src/releaseboard/integrations/releasepilot/`](src/releaseboard/integration
 ReleaseBoard can be used in GitLab CI/CD pipelines to generate release-readiness reports automatically on every push or scheduled run.
 
 For a complete guide with pipeline examples, configuration, and artifact handling, see [docs/gitlab-cicd.md](docs/gitlab-cicd.md).
+
+## OpsPortal Integration
+
+ReleaseBoard integrates with [OpsPortal](../OpsPortal/) as a managed web service:
+
+- **Auto-started** on port `8081` via `releaseboard serve --port 8081`
+- **Health monitoring** — OpsPortal polls `GET /health/live`
+- **Embedded** in the OpsPortal portal UI via iframe
+- **Framing** enabled automatically via `RELEASEBOARD_ALLOW_FRAMING=true`
+
+ReleaseBoard serves as the **reference architecture** for the OpsPortal platform. All four tools in the platform follow the same architectural model that ReleaseBoard established.
+
+No additional configuration is needed — OpsPortal manages the lifecycle automatically.
 
 ## Testing
 

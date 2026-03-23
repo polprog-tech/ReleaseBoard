@@ -22,8 +22,14 @@ class ConfigValidationError(Exception):
         super().__init__(f"Configuration validation failed: {summary}")
 
 
+_SCHEMA_CACHE: dict[str, Any] | None = None
+
+
 def _load_schema() -> dict[str, Any]:
-    return json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    global _SCHEMA_CACHE
+    if _SCHEMA_CACHE is None:
+        _SCHEMA_CACHE = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    return _SCHEMA_CACHE
 
 
 def validate_config(data: dict[str, Any]) -> list[str]:

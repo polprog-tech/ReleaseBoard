@@ -39,11 +39,16 @@ class DashboardRenderer:
             return template.render(vm=view_model)
         except Exception as exc:
             logger.error("Template rendering failed: %s", exc)
+            from releaseboard.i18n import get_locale, t
+
+            _loc = get_locale()
+            _title = t("error.page_title", locale=_loc) or "ReleaseBoard Error"
+            _heading = t("error.dashboard_rendering", locale=_loc) or "Dashboard Rendering Error"
+            _body = t("error.check_logs", locale=_loc) or "The dashboard template could not be rendered. Please check the server logs for details."
             return (
-                "<!DOCTYPE html><html><head><title>ReleaseBoard Error</title></head>"
-                "<body><h1>Dashboard Rendering Error</h1>"
-                "<p>The dashboard template could not be rendered. "
-                "Please check the server logs for details.</p></body></html>"
+                f"<!DOCTYPE html><html><head><title>{_title}</title></head>"
+                f"<body><h1>{_heading}</h1>"
+                f"<p>{_body}</p></body></html>"
             )
 
     def render_first_run(self, locale: str = "en", config_path: str = "releaseboard.json") -> str:

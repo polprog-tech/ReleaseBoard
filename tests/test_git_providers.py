@@ -264,6 +264,57 @@ class TestSmartGitProvider:
         """THEN it is not identified as GitHub."""
         assert result is False
 
+    def test_gitlab_url_detected(self):
+        """GIVEN a GitLab HTTPS URL."""
+        provider = SmartGitProvider()
+
+        """WHEN checking provider routing."""
+        result = provider._is_gitlab("https://gitlab.com/acme/repo.git")
+
+        """THEN it is identified as GitLab."""
+        assert result is True
+
+    def test_github_url_not_gitlab(self):
+        """GIVEN a GitHub URL."""
+        provider = SmartGitProvider()
+
+        """WHEN checking GitLab routing."""
+        result = provider._is_gitlab("https://github.com/acme/repo")
+
+        """THEN it is NOT identified as GitLab."""
+        assert result is False
+
+    def test_gitlab_token_passed_to_provider(self):
+        """GIVEN a SmartGitProvider created with a gitlab_token."""
+        provider = SmartGitProvider(gitlab_token="glpat-test-token-123")
+
+        """WHEN inspecting the internal GitLab provider."""
+        """THEN the token is propagated."""
+        assert provider._gitlab.token == "glpat-test-token-123"
+
+    def test_github_token_passed_to_provider(self):
+        """GIVEN a SmartGitProvider created with both tokens."""
+        provider = SmartGitProvider(
+            github_token="ghp_test123",
+            gitlab_token="glpat-test456",
+        )
+
+        """WHEN inspecting internal providers."""
+        """THEN tokens are correctly distributed."""
+        assert provider._github._token == "ghp_test123"
+        assert provider._gitlab.token == "glpat-test456"
+
+    def test_gitlab_provider_accessible_for_reuse(self):
+        """GIVEN a SmartGitProvider with a gitlab_token."""
+        provider = SmartGitProvider(gitlab_token="glpat-reuse-token")
+
+        """WHEN accessing the gitlab_provider property."""
+        gl = provider.gitlab_provider
+
+        """THEN it returns the authenticated GitLab provider."""
+        assert gl is provider._gitlab
+        assert gl.token == "glpat-reuse-token"
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # BranchInfo enriched fields

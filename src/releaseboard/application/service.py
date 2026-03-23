@@ -18,6 +18,7 @@ from releaseboard.analysis.metrics import DashboardMetrics, compute_dashboard_me
 from releaseboard.analysis.readiness import ReadinessAnalyzer
 from releaseboard.git.gitlab_provider import GitLabProvider, is_gitlab_url
 from releaseboard.git.provider import GitAccessError, GitErrorKind, GitProvider, is_placeholder_url
+from releaseboard.git.smart_provider import SmartGitProvider
 from releaseboard.shared.logging import get_logger
 
 if TYPE_CHECKING:
@@ -192,7 +193,12 @@ class AnalysisService:
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def _analyze_one(i: int, repo_config) -> tuple[int, RepositoryAnalysis]:
-            """Analyze a single repo with semaphore-limited concurrency."""
+            """Analyze a single repo with semaphore-limited concurrency.
+
+            NOTE: progress mutations are safe in asyncio's single-threaded event loop.
+            The GIL + no ``await`` between read-increment-write ensures atomicity.
+            If this code ever moves to threads, use asyncio.Lock or per-task aggregation.
+            """
             async with semaphore:
                 if self._cancel_event.is_set():
                     progress.repos[i].status = "skipped"
@@ -271,7 +277,14 @@ class AnalysisService:
                                 else resolved.resolved_name
                             )
                             try:
-                                gl = GitLabProvider()
+                                # Reuse the authenticated GitLab provider from
+                                # SmartGitProvider to avoid creating a bare one
+                                # that lacks the user-supplied token.
+                                gl: GitLabProvider
+                                if isinstance(self.git_provider, SmartGitProvider):
+                                    gl = self.git_provider.gitlab_provider
+                                else:
+                                    gl = GitLabProvider()
                                 tag_info = await asyncio.to_thread(
                                     gl.get_latest_branch_tag,
                                     url,

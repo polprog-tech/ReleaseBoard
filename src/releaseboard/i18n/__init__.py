@@ -6,14 +6,14 @@ Provides a lightweight, JSON-based translation system supporting:
 - Fallback to English when a key is missing in the target locale
 - Interpolation via Python str.format()
 - Basic pluralization (key.one / key.few / key.other for Polish)
-- Thread-local locale context for request-scoped translations
+- Async-safe locale context via contextvars for request-scoped translations
 """
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +26,8 @@ _SUPPORTED_LOCALES = ("en", "pl")
 # Loaded translation catalogs: {locale: {key: value}}
 _catalogs: dict[str, dict[str, str]] = {}
 
-# Thread-local storage for per-request locale
-_thread_local = threading.local()
+# Context-var storage for per-request locale (async-safe replacement for threading.local)
+_locale_var: contextvars.ContextVar[str] = contextvars.ContextVar("locale", default=_DEFAULT_LOCALE)
 
 
 def _load_catalog(locale: str) -> dict[str, str]:
@@ -66,13 +66,13 @@ def default_locale() -> str:
 
 
 def set_locale(locale: str) -> None:
-    """Set the active locale for the current thread/request."""
-    _thread_local.locale = locale if locale in _SUPPORTED_LOCALES else _DEFAULT_LOCALE
+    """Set the active locale for the current context (async-safe)."""
+    _locale_var.set(locale if locale in _SUPPORTED_LOCALES else _DEFAULT_LOCALE)
 
 
 def get_locale() -> str:
-    """Get the active locale for the current thread/request."""
-    return getattr(_thread_local, "locale", _DEFAULT_LOCALE)
+    """Get the active locale for the current context (async-safe)."""
+    return _locale_var.get()
 
 
 def t(key: str, locale: str | None = None, count: int | None = None, **kwargs: Any) -> str:

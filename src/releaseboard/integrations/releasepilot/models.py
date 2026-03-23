@@ -144,6 +144,8 @@ class ReleasePrepRequest:
     branch: str = ""
     since_date: str = ""
     additional_notes: str = ""
+    # Authentication (optional — injected by server from git provider)
+    git_token: str = ""
 
 
 @dataclass(frozen=True)

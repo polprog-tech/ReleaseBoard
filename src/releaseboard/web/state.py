@@ -93,11 +93,11 @@ def fill_config_defaults(data: dict[str, Any]) -> dict[str, Any]:
                     # schema constraints (pattern, minimum, enum).
                     # Note: 0 is a valid value for numeric fields — only
                     # backfill None and empty strings.
-                    if key in (
+                    if (key in (
                         "secondary_color", "primary_color", "tertiary_color",
                         "stale_threshold_days", "timeout_seconds",
                         "max_concurrent", "theme",
-                    ) and existing.get(key) in ("", None) or key not in existing:
+                    ) and existing.get(key) in ("", None)) or key not in existing:
                         existing[key] = default_val
     # Ensure layers is at least an empty list
     if "layers" not in data:
@@ -200,6 +200,8 @@ def normalize_config_types(data: dict[str, Any]) -> dict[str, Any]:
     HTML forms and JSON editors sometimes produce strings for numeric fields.
     This normalizes them before validation to prevent type errors.
     """
+    if not isinstance(data, dict):
+        return data or {}
     for path in _INTEGER_PATHS:
         obj = data
         for key in path[:-1]:
