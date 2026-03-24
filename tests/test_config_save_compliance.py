@@ -51,6 +51,7 @@ def _write_config(tmp_path: Path, data: dict | None = None) -> Path:
 def _create_app_for_test(tmp_path: Path, data: dict | None = None):
     """Create a FastAPI app for testing."""
     from releaseboard.web.server import create_app
+
     config_path = _write_config(tmp_path, data)
     return create_app(config_path), config_path
 
@@ -105,7 +106,6 @@ class TestEnvVarResolution:
     def test_resolved_env_var_replaced(self):
         """GIVEN a string with ${VAR} and VAR is set."""
         with patch.dict(os.environ, {"TEST_HOST_XYZ": "git.example.com"}):
-
             """WHEN _resolve_env_vars is called."""
             result = _resolve_env_vars("https://${TEST_HOST_XYZ}/repo")
 
@@ -138,7 +138,8 @@ class TestStructuredLogging:
     def test_get_logger_uses_structured_formatter(self):
         """GIVEN get_logger function."""
         import logging
-        logger = get_logger("test_module")
+
+        logger = get_logger("test_module")  # noqa: F841
 
         """WHEN creating a logger."""
         # Handler lives on the root 'releaseboard' logger; child loggers propagate.

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
-import ssl
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import ssl
+
     from releaseboard.domain.models import BranchInfo
 
 logger = logging.getLogger(__name__)
@@ -90,9 +90,7 @@ class GitErrorKind(StrEnum):
 class GitAccessError(Exception):
     """Raised when a git operation fails, with classified error kind."""
 
-    def __init__(
-        self, repo_url: str, message: str, kind: GitErrorKind | None = None
-    ) -> None:
+    def __init__(self, repo_url: str, message: str, kind: GitErrorKind | None = None) -> None:
         self.repo_url = repo_url
         self.kind = kind or classify_git_error(message, repo_url)
         self.detail = message
@@ -106,12 +104,20 @@ class GitAccessError(Exception):
 
 # --- Example / Placeholder URL Detection ---
 
-_EXAMPLE_DOMAINS = frozenset({
-    "example.com", "example.org", "example.net",
-    "git.example.com", "git.example.org", "git.example.net",
-    "localhost.example", "test.example",
-    "placeholder.com", "placeholder.org",
-})
+_EXAMPLE_DOMAINS = frozenset(
+    {
+        "example.com",
+        "example.org",
+        "example.net",
+        "git.example.com",
+        "git.example.org",
+        "git.example.net",
+        "localhost.example",
+        "test.example",
+        "placeholder.com",
+        "placeholder.org",
+    }
+)
 
 _EXAMPLE_DOMAIN_PATTERNS = re.compile(
     r"(?:^|\.)(?:example|placeholder|test|invalid|localhost)\."

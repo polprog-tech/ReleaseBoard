@@ -65,6 +65,7 @@ def _write_config(tmp_path: Path, data: dict | None = None) -> Path:
 def _create_app_for_test(tmp_path: Path, data: dict | None = None):
     """Create a FastAPI app for testing."""
     from releaseboard.web.server import create_app
+
     config_path = _write_config(tmp_path, data)
     return create_app(config_path), config_path
 
@@ -252,17 +253,23 @@ class TestConcurrentAnalysis:
                 return ["release/03.2025"]
 
             def get_branch_info(
-                self, url: str, branch: str, timeout: int = 30,
+                self,
+                url: str,
+                branch: str,
+                timeout: int = 30,
             ) -> BranchInfo | None:
                 return BranchInfo(
-                    name="release/03.2025", exists=True,
+                    name="release/03.2025",
+                    exists=True,
                     last_commit_date=datetime.now(tz=UTC),
-                    last_commit_author="dev", last_commit_message="ok",
+                    last_commit_author="dev",
+                    last_commit_message="ok",
                 )
 
         config = AppConfig(
-            release=ReleaseConfig(name="Test", target_month=3, target_year=2025,
-                                  branch_pattern="release/{MM}.{YYYY}"),
+            release=ReleaseConfig(
+                name="Test", target_month=3, target_year=2025, branch_pattern="release/{MM}.{YYYY}"
+            ),
             layers=[LayerConfig(id="api", label="API", order=0)],
             repositories=[
                 RepositoryConfig(name="a", url="https://git.local/a.git", layer="api"),
@@ -291,9 +298,7 @@ class TestErrorHandlers:
         app, _ = _create_app_for_test(tmp_path)
 
         """WHEN a non-existent endpoint is called."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/api/nonexistent-endpoint")
 
         """THEN returns JSON with 404 status."""
@@ -312,9 +317,7 @@ class TestDeepHealthCheck:
         app, _ = _create_app_for_test(tmp_path)
 
         """WHEN the status endpoint is called."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/api/status")
 
         """THEN it includes uptime_seconds."""
@@ -329,9 +332,7 @@ class TestDeepHealthCheck:
         app, _ = _create_app_for_test(tmp_path)
 
         """WHEN the status endpoint is called."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/api/status")
 
         """THEN it includes config_readable field."""
@@ -344,9 +345,7 @@ class TestDeepHealthCheck:
         app, _ = _create_app_for_test(tmp_path)
 
         """WHEN status is called."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/api/status")
 
         """THEN analysis_running is False."""
@@ -363,9 +362,7 @@ class TestCORSMiddleware:
         app, _ = _create_app_for_test(tmp_path)
 
         """WHEN a request with an Origin header is made."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get(
                 "/api/status",
                 headers={"Origin": "http://localhost:3000"},
@@ -385,9 +382,7 @@ class TestBodySizeLimit:
         big_body = json.dumps({"data": "x" * (1_048_577)})
 
         """WHEN sent to a JSON endpoint."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.put(
                 "/api/config",
                 content=big_body,
@@ -407,9 +402,7 @@ class TestContentTypeValidation:
         app, _ = _create_app_for_test(tmp_path)
 
         """WHEN a request with text/plain Content-Type is sent to a JSON endpoint."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.put(
                 "/api/config",
                 content='{"test": true}',
@@ -460,13 +453,19 @@ class TestStructuredLogging:
     def test_structured_formatter_basic(self):
         """GIVEN a StructuredFormatter and a log record."""
         import logging
+
         formatter = StructuredFormatter(
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="test message", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="test message",
+            args=(),
+            exc_info=None,
         )
 
         """WHEN formatting the log record."""
@@ -479,10 +478,16 @@ class TestStructuredLogging:
     def test_structured_formatter_with_extras(self):
         """GIVEN a log record with extra fields."""
         import logging
+
         formatter = StructuredFormatter("%(message)s")
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="request handled", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="request handled",
+            args=(),
+            exc_info=None,
         )
         record.request_path = "/api/status"
         record.duration_ms = 42
@@ -497,7 +502,8 @@ class TestStructuredLogging:
     def test_get_logger_uses_structured_formatter(self):
         """GIVEN get_logger function."""
         import logging
-        logger = get_logger("test_module")
+
+        logger = get_logger("test_module")  # noqa: F841
 
         """WHEN creating a logger."""
         # Handler lives on the root 'releaseboard' logger; child loggers propagate.
@@ -698,6 +704,7 @@ class TestCSPAllowsChartJS:
         import inspect
 
         from releaseboard.web.middleware import SecurityHeadersMiddleware
+
         source = inspect.getsource(SecurityHeadersMiddleware)
         assert "cdn.jsdelivr.net" in source, "CSP must allow cdn.jsdelivr.net for Chart.js"
         return source
@@ -717,6 +724,7 @@ class TestCSPAllowsChartJS:
         import re
 
         from releaseboard.web.middleware import SecurityHeadersMiddleware
+
         source = __import__("inspect").getsource(SecurityHeadersMiddleware)
 
         """WHEN extracting the script-src directive."""
@@ -746,6 +754,7 @@ class TestGitLabDefaultBranch:
     def test_method_exists(self):
         """GIVEN a GitLabProvider instance."""
         from releaseboard.git.gitlab_provider import GitLabProvider
+
         provider = GitLabProvider(token=None)
 
         """WHEN checking for get_default_branch_info."""
@@ -759,6 +768,7 @@ class TestGitLabDefaultBranch:
     def test_returns_none_for_invalid_url(self):
         """GIVEN a GitLabProvider instance."""
         from releaseboard.git.gitlab_provider import GitLabProvider
+
         provider = GitLabProvider(token=None)
 
         """WHEN calling get_default_branch_info with an invalid URL."""
@@ -792,15 +802,14 @@ class TestGitLabDefaultBranch:
         """GIVEN a GitLabProvider with a 404 API response."""
         from releaseboard.git.gitlab_provider import GitLabProvider
         from releaseboard.git.provider import GitAccessError, GitErrorKind
+
         mock_get_json.return_value = (None, 404)
         provider = GitLabProvider(token=None)
 
         """WHEN calling get_default_branch_info."""
         """THEN it raises GitAccessError with REPO_NOT_FOUND kind."""
         with pytest.raises(GitAccessError) as exc_info:
-            provider.get_default_branch_info(
-                "https://gitlab.com/mygroup/myproject", timeout=10
-            )
+            provider.get_default_branch_info("https://gitlab.com/mygroup/myproject", timeout=10)
         assert exc_info.value.kind == GitErrorKind.REPO_NOT_FOUND
 
 
@@ -809,6 +818,7 @@ class TestActiveConfigCaching:
 
     def _make_state(self, tmp_path: Path) -> AppState:
         from releaseboard.web.state import AppState
+
         config = {
             "release": {"name": "R1", "target_month": 1, "target_year": 2025},
             "repositories": [],
@@ -855,6 +865,7 @@ class TestAnalyzeSyncEventLoopSafety:
         import inspect
 
         from releaseboard.application.service import AnalysisService
+
         source = inspect.getsource(AnalysisService.analyze_sync)
 
         """WHEN checking for concurrent.futures usage."""
@@ -873,8 +884,11 @@ class TestTemplatePartialsIntegrity:
         """GIVEN the main dashboard template."""
         main = (
             Path(__file__).parent.parent
-            / "src" / "releaseboard" / "presentation"
-            / "templates" / "dashboard.html.j2"
+            / "src"
+            / "releaseboard"
+            / "presentation"
+            / "templates"
+            / "dashboard.html.j2"
         )
         content = main.read_text(encoding="utf-8")
 
@@ -884,8 +898,7 @@ class TestTemplatePartialsIntegrity:
         """THEN it uses includes and is a small orchestrator."""
         assert "{% include" in content
         assert len(lines) < 50, (
-            f"Main template should be a small orchestrator,"
-            f" got {len(lines)} lines"
+            f"Main template should be a small orchestrator, got {len(lines)} lines"
         )
 
     def test_jinja_render_produces_html(self):
@@ -898,13 +911,19 @@ class TestTemplatePartialsIntegrity:
         )
 
         vm = DashboardViewModel(
-            title="Test", subtitle="Sub", company="Co",
-            primary_color="#fb6400", secondary_color="#002754e6",
+            title="Test",
+            subtitle="Sub",
+            company="Co",
+            primary_color="#fb6400",
+            secondary_color="#002754e6",
             tertiary_color="#10b981",
-            theme="system", release_name="R1",
+            theme="system",
+            release_name="R1",
             generated_at="2025-01-01T00:00:00Z",
             metrics=DashboardMetrics(),
-            layers=[], attention_items=[], all_repos=[],
+            layers=[],
+            attention_items=[],
+            all_repos=[],
             status_chart=ChartData(labels=[], values=[], colors=[]),
             layer_readiness_chart=ChartData(labels=[], values=[], colors=[]),
         )

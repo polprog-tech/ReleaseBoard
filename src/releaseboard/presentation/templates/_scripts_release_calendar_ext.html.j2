@@ -495,7 +495,7 @@
         
         if (hasCal) {
           var cal = existing.release_calendar;
-          if (title && cal.name) title.textContent = cal.name;
+          if (title) { title.style.display = ''; if (cal.name) title.textContent = cal.name; }
           
           var html = '';
           if (cal.months && cal.months.length) {
@@ -537,6 +537,7 @@
           /* No calendar — show empty state with Create button */
           container.style.display = 'none';
           if (actions) actions.style.display = 'none';
+          if (title) title.style.display = 'none';
           if (emptyState) emptyState.classList.remove('hidden');
           view.classList.remove('hidden');
           if (typeof localizeDirect === 'function') localizeDirect();

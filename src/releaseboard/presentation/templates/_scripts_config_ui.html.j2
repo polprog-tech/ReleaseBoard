@@ -457,7 +457,7 @@
   /* --- Inline table actions --- */
   async function refreshRepo(name) {
     /* Re-analyze a single repo without full re-run */
-    var row = document.querySelector('.repo-row[data-repo="' + name + '"]');
+    var row = document.querySelector('.repo-row.filterable-row[data-repo="' + name + '"]');
     var btn = row ? row.querySelector('.row-action-btn.refresh') : null;
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
     /* Apply skeleton effect to all cells except actions */
@@ -477,8 +477,9 @@
       });
       var data = await resp.json();
       if (data.ok) {
-        if (typeof showToast === 'function') showToast(name + ': ' + data.status, 'success');
-        setTimeout(function(){ window.location.reload(); }, 600);
+        if (typeof showToast === 'function') showToast(name + ': ' + _t('status.' + data.status), 'success');
+        /* Update the row in-place instead of full page reload */
+        await _replaceRowFromServer(name, row, btn);
       } else {
         if (typeof showToast === 'function') showToast(data.error || 'Refresh failed', 'error');
         _restoreRow(row, btn);
@@ -486,6 +487,50 @@
     } catch(e) {
       if (typeof showToast === 'function') showToast('Network error', 'error');
       _restoreRow(row, btn);
+    }
+  }
+
+  async function _replaceRowFromServer(name, oldRow, btn) {
+    /* Fetch the current page and replace only the affected row + layer stats */
+    try {
+      var pageResp = await fetch(window.location.pathname, {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      var html = await pageResp.text();
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(html, 'text/html');
+      var newRow = doc.querySelector('.repo-row.filterable-row[data-repo="' + name + '"]');
+      if (newRow && oldRow) {
+        oldRow.replaceWith(newRow);
+        /* Also update the layer section header (stats + readiness bar) */
+        var layerSection = newRow.closest
+          ? document.querySelector('.layer-section[data-layer-section="' + (newRow.dataset.layer || '') + '"]')
+          : null;
+        if (layerSection) {
+          var newSection = doc.querySelector('.layer-section[data-layer-section="' + (newRow.dataset.layer || '') + '"]');
+          if (newSection) {
+            var oldHeader = layerSection.querySelector('.layer-header');
+            var newHeader = newSection.querySelector('.layer-header');
+            if (oldHeader && newHeader) oldHeader.replaceWith(newHeader);
+            var oldBar = layerSection.querySelector('.readiness-bar-container');
+            var newBar = newSection.querySelector('.readiness-bar-container');
+            if (oldBar && newBar) oldBar.replaceWith(newBar);
+          }
+        }
+        /* Update top-level metrics if present */
+        var oldMetrics = document.querySelector('#dashboardContent .metrics-grid');
+        var newMetrics = doc.querySelector('#dashboardContent .metrics-grid');
+        if (oldMetrics && newMetrics) oldMetrics.replaceWith(newMetrics);
+        /* Update attention panel */
+        var oldAttn = document.querySelector('.attention-section');
+        var newAttn = doc.querySelector('.attention-section');
+        if (oldAttn && newAttn) oldAttn.replaceWith(newAttn);
+        else if (oldAttn && !newAttn) oldAttn.remove();
+      } else {
+        window.location.reload();
+      }
+    } catch(e) {
+      window.location.reload();
     }
   }
   function _restoreRow(row, btn) {

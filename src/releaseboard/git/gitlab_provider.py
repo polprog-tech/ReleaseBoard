@@ -5,16 +5,18 @@ from __future__ import annotations
 import json
 import logging
 import os
-import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from releaseboard.domain.models import BranchInfo, TagInfo
 from releaseboard.git.provider import GitAccessError, GitErrorKind, GitProvider
 from releaseboard.shared.network import make_ssl_context
+
+if TYPE_CHECKING:
+    import ssl
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +129,7 @@ class GitLabProvider(GitProvider):
                 kind=GitErrorKind.AUTH_REQUIRED,
             )
         if status == 403:
-            hint = (
-                " Ensure the token has read access (Reporter role or higher)"
-                " to this project."
-            )
+            hint = " Ensure the token has read access (Reporter role or higher) to this project."
             raise GitAccessError(
                 repo_url,
                 f"Access denied (HTTP 403). {detail}{hint}".strip(),
@@ -234,8 +233,7 @@ class GitLabProvider(GitProvider):
                         detail = data.get("message") or data.get("error") or ""
                     raise GitAccessError(
                         f"{api_base.replace('/api/v4', '')}/{group_path}",
-                        f"Cannot list repos for '{group_path}' "
-                        f"(HTTP {status}). {detail}".strip(),
+                        f"Cannot list repos for '{group_path}' (HTTP {status}). {detail}".strip(),
                         kind=GitErrorKind.REPO_NOT_FOUND
                         if status == 404
                         else GitErrorKind.NETWORK_ERROR,
@@ -248,13 +246,15 @@ class GitLabProvider(GitProvider):
             for p in data:
                 if not isinstance(p, dict):
                     continue
-                repos.append({
-                    "name": p.get("path", p.get("name", "")),
-                    "url": p.get("web_url", ""),
-                    "default_branch": p.get("default_branch", "main"),
-                    "description": p.get("description") or "",
-                    "visibility": p.get("visibility", ""),
-                })
+                repos.append(
+                    {
+                        "name": p.get("path", p.get("name", "")),
+                        "url": p.get("web_url", ""),
+                        "default_branch": p.get("default_branch", "main"),
+                        "description": p.get("description") or "",
+                        "visibility": p.get("visibility", ""),
+                    }
+                )
 
             if len(data) < 100:
                 break
@@ -262,9 +262,7 @@ class GitLabProvider(GitProvider):
 
         return repos
 
-    def list_remote_branches(
-        self, repo_url: str, timeout: int = 30
-    ) -> list[str]:
+    def list_remote_branches(self, repo_url: str, timeout: int = 30) -> list[str]:
         """List branch names for a GitLab project."""
         parsed = parse_gitlab_url(repo_url)
         if not parsed:
@@ -276,10 +274,7 @@ class GitLabProvider(GitProvider):
         branches: list[str] = []
         page = 1
         while True:
-            url = (
-                f"{api_base}/projects/{encoded}"
-                f"/repository/branches?per_page=100&page={page}"
-            )
+            url = f"{api_base}/projects/{encoded}/repository/branches?per_page=100&page={page}"
             data, status = self._get_json(url, timeout)
             if status >= 400 or not isinstance(data, list):
                 if page == 1:
@@ -323,6 +318,7 @@ class GitLabProvider(GitProvider):
         if commit.get("committed_date"):
             try:
                 from datetime import datetime
+
                 commit_date = datetime.fromisoformat(
                     commit["committed_date"].replace("Z", "+00:00")
                 )
@@ -339,9 +335,7 @@ class GitLabProvider(GitProvider):
             data_source="gitlab_api",
         )
 
-    def get_default_branch_info(
-        self, repo_url: str, timeout: int = 30
-    ) -> BranchInfo | None:
+    def get_default_branch_info(self, repo_url: str, timeout: int = 30) -> BranchInfo | None:
         """Get metadata for the repository's default branch via GitLab API."""
         parsed = parse_gitlab_url(repo_url)
         if not parsed:
@@ -442,7 +436,9 @@ class GitLabProvider(GitProvider):
             if refs_status >= 400 or not isinstance(refs_data, list):
                 logger.debug(
                     "Cannot check refs for tag %s (SHA %s): HTTP %d",
-                    tag_name, target_sha, refs_status,
+                    tag_name,
+                    target_sha,
+                    refs_status,
                 )
                 continue
 
@@ -457,15 +453,18 @@ class GitLabProvider(GitProvider):
                 if raw_date:
                     try:
                         from datetime import datetime
-                        committed_date = datetime.fromisoformat(
-                            raw_date.replace("Z", "+00:00")
-                        )
+
+                        committed_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
                     except (ValueError, TypeError):
                         pass
 
                 logger.info(
                     "Latest tag for %s/%s branch '%s': %s (%s)",
-                    namespace, project, branch_name, tag_name, target_sha[:8],
+                    namespace,
+                    project,
+                    branch_name,
+                    tag_name,
+                    target_sha[:8],
                 )
                 return TagInfo(
                     name=tag_name,
@@ -476,6 +475,9 @@ class GitLabProvider(GitProvider):
 
         logger.debug(
             "No tags reachable from branch '%s' in %s/%s (checked %d tags)",
-            branch_name, namespace, project, checked,
+            branch_name,
+            namespace,
+            project,
+            checked,
         )
         return None

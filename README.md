@@ -142,13 +142,16 @@ ReleaseBoard works fully without ReleasePilot — the integration is optional. S
 
 ## Quick Start
 
+### Standard Environment
+
 ```bash
 # 1. Install (inside a virtual environment)
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# 2. (Optional) Set GitLab token for private repos
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
+# 2. (Optional) Set token for private repos
+export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"   # GitLab
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"     # GitHub
 
 # 3. Start the dashboard (setup wizard will guide you on first run)
 releaseboard serve
@@ -167,6 +170,81 @@ open output/dashboard.html
 # 5b. Or start interactive dashboard
 releaseboard serve --config releaseboard.json
 ```
+
+### Corporate Network (Zscaler / VPN / Proxy)
+
+If you're behind a corporate proxy that intercepts HTTPS (e.g. Zscaler, Netskope), you need to export the corporate CA bundle **before** installing dependencies. The examples below show GitLab, but the same applies to GitHub Enterprise or any private Git host.
+
+<details>
+<summary><b>macOS / Linux</b></summary>
+
+```bash
+# 1. Export corporate CA certificates (macOS)
+security find-certificate -a -p \
+  /Library/Keychains/System.keychain \
+  /System/Library/Keychains/SystemRootCertificates.keychain \
+  > ~/combined-ca-bundle.pem
+
+# On Linux, the CA bundle is usually already available:
+#   /etc/ssl/certs/ca-certificates.crt          (Debian/Ubuntu)
+#   /etc/pki/tls/certs/ca-bundle.crt            (RHEL/Fedora)
+# If your proxy adds its own CA, ask your IT department for the .pem file
+# and append it: cat corporate-ca.pem >> ~/combined-ca-bundle.pem
+
+# 2. Configure SSL trust (add to ~/.zshrc or ~/.bashrc to persist)
+export SSL_CERT_FILE=~/combined-ca-bundle.pem
+export REQUESTS_CA_BUNDLE=~/combined-ca-bundle.pem
+
+# 3. (Optional) Also configure git to use the same CA bundle
+git config --global http.sslCAInfo ~/combined-ca-bundle.pem
+
+# 4. Install (inside a virtual environment)
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# 5. (Optional) Set token for private repos
+export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"   # GitLab
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"     # GitHub Enterprise
+
+# 6. Start the dashboard
+releaseboard serve
+# → Open http://127.0.0.1:8080
+```
+</details>
+
+<details>
+<summary><b>Windows (PowerShell)</b></summary>
+
+```powershell
+# 1. Export corporate CA certificate
+# Ask your IT department for the corporate CA .pem file, or export it from
+# certmgr.msc → Trusted Root Certification Authorities → Certificates
+# Right-click → All Tasks → Export → Base-64 encoded X.509 (.CER)
+# Save as: %USERPROFILE%\corporate-ca-bundle.pem
+
+# 2. Configure SSL trust (add to your PowerShell profile to persist)
+$env:SSL_CERT_FILE = "$env:USERPROFILE\corporate-ca-bundle.pem"
+$env:REQUESTS_CA_BUNDLE = "$env:USERPROFILE\corporate-ca-bundle.pem"
+
+# 3. (Optional) Also configure git to use the same CA bundle
+git config --global http.sslCAInfo "$env:USERPROFILE\corporate-ca-bundle.pem"
+
+# 4. Install (inside a virtual environment)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+
+# 5. (Optional) Set token for private repos
+$env:GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"   # GitLab
+$env:GITHUB_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxx"     # GitHub Enterprise
+
+# 6. Start the dashboard
+releaseboard serve
+# → Open http://127.0.0.1:8080
+```
+
+> **Tip:** To make environment variables permanent on Windows, use `[System.Environment]::SetEnvironmentVariable("SSL_CERT_FILE", "$env:USERPROFILE\corporate-ca-bundle.pem", "User")` or set them via System Properties → Environment Variables.
+</details>
 
 ## Web Server Mode
 
@@ -475,131 +553,16 @@ No additional configuration is needed — OpsPortal manages the lifecycle automa
 
 ## Troubleshooting
 
-### SSL certificate errors during `pip install`
+For detailed solutions to common issues, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
-**Symptom:** `pip install -e ".[dev]"` fails with `SSL: CERTIFICATE_VERIFY_FAILED` or similar.
-
-**Cause:** Corporate proxy (Zscaler, Netskope, etc.) intercepts HTTPS and uses its own CA certificate that Python doesn't trust.
-
-**Fix — find and export your corporate CA bundle:**
-
-```bash
-# macOS — export system certificates (includes Zscaler CA)
-security find-certificate -a -p \
-  /Library/Keychains/System.keychain \
-  /System/Library/Keychains/SystemRootCertificates.keychain \
-  > ~/combined-ca-bundle.pem
-
-# Tell pip (and Python) to use it
-export SSL_CERT_FILE=~/combined-ca-bundle.pem
-export REQUESTS_CA_BUNDLE=~/combined-ca-bundle.pem
-
-# Now install works
-pip install -e ".[dev]"
-```
-
-Add the `export` lines to your `~/.zshrc` (or `~/.bashrc`) to make it permanent.
-
-**Quick check — is your venv working?**
-
-```bash
-cd ReleaseBoard
-source .venv/bin/activate
-pip install --dry-run requests 2>&1 | head -5
-# Should show "Would install …" — not an SSL error
-```
-
-### `hatchling` not found during install
-
-**Symptom:**
-```
-ERROR: Could not find a version that satisfies the requirement hatchling
-```
-
-**Cause:** `pip` can't download the build backend — usually an SSL/proxy issue (see above) or outdated pip.
-
-**Fix:**
-```bash
-source .venv/bin/activate
-pip install --upgrade pip setuptools
-pip install hatchling
-pip install -e ".[dev]"
-```
-
-### GitLab repositories return 404 (private repos)
-
-**Symptom:** Analysis shows `Repository not found (HTTP 404)` for all repos, even though they exist.
-
-**Cause:** GitLab returns 404 (not 401/403) for private repositories when the request is unauthenticated. This is by design — GitLab hides private repos from anonymous users.
-
-**Fix — provide a GitLab Personal Access Token:**
-
-Option A — **via the Setup Wizard** (recommended, persistent):
-
-1. Open `http://127.0.0.1:8080`
-2. Click ⚙️ → Setup Wizard
-3. Select GitLab, paste your token (`glpat-…`) in the Token field
-4. The token is saved in your browser's `localStorage` and automatically restored on every page load — even after server restarts
-
-Option B — **via environment variable:**
-
-```bash
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
-releaseboard serve
-```
-
-> **How to create a token:** GitLab → Settings → Access Tokens → create with `read_api` scope (Reporter role or higher on the projects).
-
-### Wrong GitLab hostname — all repos fail
-
-**Symptom:** All repos return `HTTP 404` or `HTTP 0` (network error), but your token is correct.
-
-**Cause:** The GitLab hostname in `releaseboard.json` doesn't match the actual server.
-
-**Fix — verify the correct hostname from a local clone:**
-
-```bash
-cd your-project
-git remote -v
-# origin  https://gitlab.actual-host.com/group/project.git (fetch)
-#                  ^^^^^^^^^^^^^^^^^^^^^^^^
-#                  This is the correct hostname
-```
-
-Then update all URLs in `releaseboard.json`:
-
-```bash
-cd ReleaseBoard
-sed -i '' 's|gitlab.wrong-host.com|gitlab.actual-host.com|g' releaseboard.json
-```
-
-### Analysis is slow (>30 seconds for ~30 repos)
-
-**Expected performance:** ~15–25s for 33 repos over a corporate VPN (each API call takes ~1–1.5s due to proxy latency).
-
-**If it's significantly slower, check:**
-
-1. **`max_concurrent` too low** — default is `10`, increase to `20` in Settings:
-   ```json
-   "settings": {
-     "max_concurrent": 20,
-     "timeout_seconds": 10
-   }
-   ```
-
-2. **Token not set** — without a token, GitLab returns 404 for every repo (15s timeout each). See [GitLab repositories return 404](#gitlab-repositories-return-404-private-repos).
-
-3. **Network latency** — ReleaseBoard makes 1–2 API calls per repo (branch check + tag enrichment). Over a high-latency VPN, each call may take 1–2s. This is the main bottleneck — the analysis itself is concurrent.
-
-### Server won't start — `address already in use`
-
-```bash
-# Find and kill whatever is using port 8080
-lsof -i :8080 -t | xargs kill -9
-
-# Or use a different port
-releaseboard serve --port 9090
-```
+| Problem | Quick Fix |
+|---------|-----------|
+| **SSL certificate errors** during `pip install` | Export corporate CA bundle: `export SSL_CERT_FILE=~/combined-ca-bundle.pem` — see [Corporate Network setup](#corporate-network-zscaler--vpn--proxy) |
+| **`hatchling` not found** | `pip install --upgrade pip setuptools && pip install hatchling` |
+| **GitLab repos return 404** | Set `GITLAB_TOKEN` via Setup Wizard or `export GITLAB_TOKEN="glpat-…"` |
+| **Wrong GitLab hostname** | Check with `git remote -v` in a local clone and update `releaseboard.json` |
+| **Analysis is slow** | Increase `max_concurrent` to `20` in settings, ensure token is set |
+| **Port already in use** | `lsof -i :8080 -t \| xargs kill -9` or use `--port 9090` |
 
 ## Testing
 
@@ -665,6 +628,7 @@ pytest tests/test_readiness_analysis.py -v
 | [docs/schema.md](docs/schema.md) | JSON Schema documentation |
 | [docs/usage.md](docs/usage.md) | CLI usage guide |
 | [docs/dashboard.md](docs/dashboard.md) | Dashboard features and sections |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and solutions |
 | [docs/gitlab-cicd.md](docs/gitlab-cicd.md) | GitLab CI/CD integration guide |
 | [docs/security.md](docs/security.md) | Security considerations |
 | [docs/testing.md](docs/testing.md) | Testing strategy and guidelines |
