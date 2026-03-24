@@ -84,8 +84,8 @@
           <h3 data-i18n="ui.wizard.apply_title">Would you like to use this configuration?</h3>
           <p data-i18n="ui.wizard.apply_desc">Discovered repositories will be saved as a new ReleaseBoard configuration.</p>
           <div class="wiz-confirm-actions">
-            <button class="wiz-btn primary" onclick="RB.wizApply('replace')" data-i18n="ui.wizard.replace_config">Replace current configuration</button>
-            <button class="wiz-btn" onclick="RB.wizApply('merge')" data-i18n="ui.wizard.merge_config">Merge with current</button>
+            <button class="wiz-btn primary" id="wizBtnReplace" onclick="RB.wizApply('replace')" data-i18n="ui.wizard.replace_config">Replace current configuration</button>
+            <button class="wiz-btn" id="wizBtnMerge" onclick="RB.wizApply('merge')" data-i18n="ui.wizard.merge_config">Merge with current</button>
             <button class="wiz-btn" onclick="RB.wizGoStep(2)" data-i18n="ui.wizard.back_to_editing">Back to editing</button>
             <button class="wiz-btn" onclick="RB.closeWizard()" data-i18n="ui.cancel">Cancel</button>
           </div>
@@ -94,9 +94,9 @@
       </div>
     </div>
     <div class="wizard-footer" id="wizardFooter">
-      <button class="wiz-btn" id="wizBtnPrev" onclick="RB.wizPrev()" style="display:none;" data-i18n="ui.wizard.btn_prev">← Back</button>
+      <button class="wiz-btn" id="wizBtnPrev" onclick="RB.wizPrev()" style="display:none;" data-i18n="ui.wizard.btn_prev">Back</button>
       <span class="spacer"></span>
-      <button class="wiz-btn primary" id="wizBtnNext" onclick="RB.wizNext()" data-i18n="ui.wizard.btn_next">Next →</button>
+      <button class="wiz-btn primary" id="wizBtnNext" onclick="RB.wizNext()" data-i18n="ui.wizard.btn_next">Next</button>
     </div>
   </div>
 </div>
@@ -130,10 +130,20 @@
       <button class="rc-wizard-close" onclick="RB.closeConfigImport()" aria-label="Close" data-i18n-aria-label="ui.aria.close_modal">&times;</button>
     </div>
     <div class="rc-wizard-body modal-body-padded">
-      <p class="wiz-import-desc" data-i18n="ui.config_import.description">Import a ReleaseBoard configuration from a JSON file. The file will be validated against the schema before import.</p>
-      <div class="rc-import-notice wiz-notice-box">
+      <p class="wiz-import-desc cfgImportInitial" data-i18n="ui.config_import.description">Import a ReleaseBoard configuration from a JSON file. The file will be validated against the schema before import.</p>
+      <div class="rc-import-notice wiz-notice-box cfgImportInitial">
         <strong>⚠️ <span data-i18n="ui.config_import.json_only">Only JSON files are accepted.</span></strong>
         <span class="text-tertiary" data-i18n="ui.config_import.schema_notice"> The data must match the configuration schema. Validation errors will be shown if the file is invalid.</span>
+      </div>
+      <!-- Validation Status (shown after file selected) -->
+      <div id="cfgImportStatus" style="display:none;"></div>
+      <!-- Action buttons (hidden until file validated) -->
+      <div id="cfgImportActions" style="display:none;" class="wiz-collapsible-section">
+        <div class="wiz-btn-group">
+          <button class="rc-btn primary" id="cfgImportReplace" onclick="RB.configImportReplace()" data-i18n="ui.config_import.replace_save">Replace &amp; Save</button>
+          <button class="rc-btn" id="cfgImportPreview" onclick="RB.configImportPreview()" data-i18n="ui.config_import.preview_only">Preview Only</button>
+          <button class="rc-btn" onclick="RB.closeConfigImport()" data-i18n="ui.cancel">Cancel</button>
+        </div>
       </div>
       <!-- File Drop Zone -->
       <div class="rc-import-dropzone" id="cfgImportDropzone" onclick="document.getElementById('cfgImportFileInput').click()">
@@ -141,18 +151,16 @@
         <div data-i18n="ui.config_import.drop_or_browse">Drop a JSON file here or click to browse</div>
         <input type="file" id="cfgImportFileInput" accept=".json" class="hidden" onchange="RB.handleConfigImportFile(event)">
       </div>
-      <div class="wiz-divider">
+      <div class="wiz-divider cfgImportInitial">
         <div class="wiz-divider-line"></div>
         <span class="wiz-divider-label" data-i18n="ui.config_import.or">or</span>
         <div class="wiz-divider-line"></div>
       </div>
-      <button class="rc-btn wiz-btn-full" onclick="RB.closeConfigImport();RB.openWizard()">
+      <button class="rc-btn wiz-btn-full cfgImportInitial" onclick="RB.closeConfigImport();RB.openWizard()">
         🧙 <span data-i18n="ui.config_import.create_from_scratch">Create configuration from scratch</span>
       </button>
-      <!-- Validation Status -->
-      <div id="cfgImportStatus" style="display:none;"></div>
       <!-- Schema Reference (collapsible) -->
-      <div class="rc-import-schema-section wiz-collapsible-section">
+      <div class="rc-import-schema-section wiz-collapsible-section cfgImportInitial">
         <button class="rc-btn btn-sm" onclick="RB.toggleCfgImportSchema()" id="cfgSchemaToggle" data-i18n="ui.config_import.show_schema">Show expected JSON format</button>
         <div id="cfgSchemaContent" style="display:none;" class="mt-12">
           <h4 class="wiz-section-heading" data-i18n="ui.config_import.schema_title">Expected JSON Schema</h4>
@@ -160,14 +168,6 @@
           <div id="cfgSchemaDisplay" class="rc-import-code"></div>
           <button class="rc-btn btn-sm mt-12" onclick="RB.toggleCfgImportExample()" id="cfgExampleToggle" data-i18n="ui.config_import.show_example">Show example configuration</button>
           <div id="cfgExampleDisplay" class="rc-import-code mt-12" style="display:none;"></div>
-        </div>
-      </div>
-      <!-- Action buttons (hidden until file validated) -->
-      <div id="cfgImportActions" style="display:none;" class="wiz-collapsible-section">
-        <div class="wiz-btn-group">
-          <button class="rc-btn primary" id="cfgImportReplace" onclick="RB.configImportReplace()" data-i18n="ui.config_import.replace_save">Replace &amp; Save</button>
-          <button class="rc-btn" id="cfgImportPreview" onclick="RB.configImportPreview()" data-i18n="ui.config_import.preview_only">Preview Only</button>
-          <button class="rc-btn" onclick="RB.closeConfigImport()" data-i18n="ui.cancel">Cancel</button>
         </div>
       </div>
     </div>

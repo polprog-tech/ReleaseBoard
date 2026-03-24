@@ -1,5 +1,4 @@
 """Regression tests for production audit fixes (second pass).
-"""Regression tests for production audit fixes (second pass).
 
 Covers: operator precedence in config backfill, schema caching,
 atomic first-run config write, SSE serialization logging.

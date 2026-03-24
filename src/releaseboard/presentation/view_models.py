@@ -92,6 +92,7 @@ class RepoViewModel:
     error_kind: str
     error_detail: str
     branch_exists: bool
+    status_severity: int = 99
     # Provider metadata (available even when release branch is missing)
     repo_default_branch: str = ""
     repo_visibility: str = ""
@@ -255,6 +256,7 @@ def build_repo_view_model(
         error_kind=analysis.error_kind or "",
         error_detail=analysis.error_detail or "",
         branch_exists=analysis.branch_exists,
+        status_severity=analysis.status.severity,
         repo_default_branch=repo_default_branch,
         repo_visibility=repo_visibility,
         repo_description=repo_description,

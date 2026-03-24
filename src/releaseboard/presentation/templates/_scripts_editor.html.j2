@@ -50,7 +50,6 @@
     'compact': { name: _t('ui.template.compact'), order: ['milestones','metrics','attention','summary'] },
     'calendar': { name: _t('ui.template.calendar'), order: ['milestones','release-calendar'] },
   };
-
   let activeTemplate = 'engineering';
   let userTemplates = {};
 
@@ -123,8 +122,6 @@
     saveUserTemplates();
     renderTemplateList();
   }
-
-
   function deleteTemplate(id){
     if(!userTemplates[id]) return;
     showModal({
@@ -142,7 +139,6 @@
       ]
     });
   }
-
 
   /* --- JSON Autocomplete --- */
   let acPopup = null;
@@ -680,6 +676,8 @@
     const st = document.getElementById('cfgImportStatus'); if (st) { st.style.display = 'none'; st.innerHTML = ''; }
     const ac = document.getElementById('cfgImportActions'); if (ac) ac.style.display = 'none';
     const fi = document.getElementById('cfgImportFileInput'); if (fi) fi.value = '';
+    // Restore initial UI elements hidden after validation
+    document.querySelectorAll('.cfgImportInitial').forEach(function(el) { el.style.display = ''; });
     o.classList.add('active');
   }
   function closeConfigImport() { const o = document.getElementById('cfgImportOverlay'); if (o) o.classList.remove('active'); _cfgImportData = null; }
@@ -744,8 +742,9 @@
 
       if (result.ok) {
         _cfgImportData = parsed;
-        // Hide dropzone after successful validation
+        // Hide dropzone and initial UI after successful validation
         const dz = document.getElementById('cfgImportDropzone'); if (dz) dz.style.display = 'none';
+        document.querySelectorAll('.cfgImportInitial').forEach(function(el) { el.style.display = 'none'; });
         // Build import summary
         const repos = (parsed.repositories || []);
         const relName = (parsed.release && parsed.release.name) || '';
@@ -754,9 +753,14 @@
         if (relName) summaryParts.push('<strong>' + esc(relName) + '</strong>');
         if (repos.length) summaryParts.push(repos.length + ' repo' + (repos.length !== 1 ? 's' : ''));
         if (layers.length) summaryParts.push(layers.length + ' layer' + (layers.length !== 1 ? 's' : ''));
-        const fileLabel = '<span style="opacity:.7">\ud83d\udcc4 ' + esc(file.name) + '</span>';
-        const summary = '<br>' + fileLabel + (summaryParts.length ? '<br>' + summaryParts.join(', ') : '');
-        status.innerHTML = '<div class="rc-validation-msg success rc-validation-msg-block">✅ ' + esc(_t('ui.config_import.valid')) + summary + '</div>';
+        const fileLabel = '<div style="margin-top:8px;font-size:1.05em;">\ud83d\udcc4 <strong>' + esc(file.name) + '</strong></div>';
+        const summaryLine = summaryParts.length ? '<div style="margin-top:4px;color:var(--text-secondary);">' + summaryParts.join(' · ') + '</div>' : '';
+        status.innerHTML = '<div class="rc-validation-msg success rc-validation-msg-block" style="padding:16px;">✅ '
+          + esc(_t('ui.config_import.valid'))
+          + fileLabel + summaryLine
+          + '<div style="margin-top:8px;font-size:.9em;color:var(--text-tertiary);">'
+          + esc(_t('ui.config_import.ready_hint') !== 'ui.config_import.ready_hint' ? _t('ui.config_import.ready_hint') : 'File is valid. Choose an action below to apply it.')
+          + '</div></div>';
         actions.style.display = '';
       } else {
         _cfgImportData = null;
@@ -785,21 +789,30 @@
     draft = importedData;
     hidePreviewBadge(); populateForm(); updateJsonEditor(); await pushDraftAndRefresh();
   }
-  function configImportPreview() {
+  async function configImportPreview() {
     if (!_cfgImportData) return;
-    const importedData = _cfgImportData;
     _cfgPreviewBackup = JSON.parse(JSON.stringify(draft));
-    _cfgImportData = null;
-    closeConfigImport();
-    draft = importedData;
-    populateForm(); updateJsonEditor(); validateDraft(); showPreviewBadge();
+    draft = _cfgImportData; _cfgImportData = null; closeConfigImport();
+    populateForm(); updateJsonEditor();
+    try { await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(cleanDraft(draft))}); } catch(e) {}
+    try { sessionStorage.setItem('rb-preview-backup',JSON.stringify(_cfgPreviewBackup)); sessionStorage.setItem('rb-preview-active','1'); } catch(e) {}
+    showPreviewBadge(); await startAnalysis();
   }
   function discardConfigPreview() {
-    if (_cfgPreviewBackup) { draft = _cfgPreviewBackup; _cfgPreviewBackup = null; populateForm(); updateJsonEditor(); validateDraft(); }
-    hidePreviewBadge();
+    var backup = _cfgPreviewBackup;
+    if (!backup) { try { backup = JSON.parse(sessionStorage.getItem('rb-preview-backup')); } catch(e) {} }
+    if (backup) {
+      draft = backup; _cfgPreviewBackup = null; populateForm(); updateJsonEditor();
+      (async function() {
+        try { await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(cleanDraft(draft))}); await fetch('/api/config/save',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}}); } catch(e) {}
+        try { sessionStorage.removeItem('rb-preview-backup'); sessionStorage.removeItem('rb-preview-active'); } catch(e) {}
+        hidePreviewBadge(); await startAnalysis();
+      })();
+    } else { hidePreviewBadge(); }
   }
-  function showPreviewBadge() { const el = document.getElementById('previewBadge'); if (el) el.classList.remove('hidden'); }
-  function hidePreviewBadge() { const el = document.getElementById('previewBadge'); if (el) el.classList.add('hidden'); _cfgPreviewBackup = null; }
+  function showPreviewBadge() { var el = document.getElementById('previewBadge'); if (el) el.classList.remove('hidden'); }
+  function hidePreviewBadge() { var el = document.getElementById('previewBadge'); if (el) el.classList.add('hidden'); _cfgPreviewBackup = null; try { sessionStorage.removeItem('rb-preview-backup'); sessionStorage.removeItem('rb-preview-active'); } catch(e) {} }
+  try { if (sessionStorage.getItem('rb-preview-active') === '1') showPreviewBadge(); } catch(e) {}
 
   /* Dropzone drag & drop for config import */
   (function() {

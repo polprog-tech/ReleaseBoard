@@ -213,7 +213,7 @@ body.is-analyzing .dashboard-section::after {
 .cfg-section { margin-bottom: 24px; }
 .cfg-section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary); margin-bottom: 12px; padding: 8px 12px; border-left: 3px solid var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 .cfg-field { margin-bottom: 14px; }
-.cfg-label { display: inline; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.cfg-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
 .cfg-help { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
 .cfg-input, .cfg-select, .cfg-textarea { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; color: var(--text-primary); font-family: var(--font); transition: border-color var(--transition); }
 .cfg-input:focus, .cfg-select:focus, .cfg-textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
@@ -357,6 +357,11 @@ input[type="checkbox"] { accent-color: var(--primary); }
 .repo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .repo-table thead { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
 .repo-table th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-tertiary); white-space: nowrap; }
+.repo-table th[data-sortable] { cursor: pointer; user-select: none; position: relative; padding-right: 22px; }
+.repo-table th[data-sortable]:hover { color: var(--text-primary); }
+.repo-table th[data-sortable]::after { content: '⇅'; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; opacity: 0.35; }
+.repo-table th[data-sortable].sort-asc::after { content: '▲'; opacity: 0.85; }
+.repo-table th[data-sortable].sort-desc::after { content: '▼'; opacity: 0.85; }
 .repo-table th.col-actions { min-width: 100px; }
 .repo-table td { padding: 12px 14px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
 .repo-table tbody tr { transition: background var(--transition); cursor: pointer; }
@@ -379,6 +384,8 @@ input[type="checkbox"] { accent-color: var(--primary); }
 .row-action-btn.edit:hover { background: var(--primary); color: var(--text-inverse); border-color: var(--primary); }
 .row-action-btn.danger { border-color: #DC2626; color: #DC2626; }
 .row-action-btn.danger:hover { background: #DC2626; color: #fff; border-color: #DC2626; }
+.row-action-btn.refresh { border-color: var(--border); font-size: 13px; padding: 2px 6px; }
+.row-action-btn.refresh:hover { background: var(--bg-secondary); border-color: var(--primary); }
 [data-theme="dark"] .row-action-btn.danger { border-color: #f87171; color: #f87171; }
 [data-theme="dark"] .row-action-btn.danger:hover { background: #DC2626; color: #fff; }
 [data-theme="midnight"] .row-action-btn.danger { border-color: #f87171; color: #f87171; }
@@ -537,7 +544,8 @@ input[type="checkbox"] { accent-color: var(--primary); }
 .mt-12 { margin-top: 12px; }
 .mt-16 { margin-top: 16px; }
 .btn-sm { font-size: .82rem; }
-.modal-narrow { max-width: 720px; }
+.modal-narrow { max-width: 720px; max-height: fit-content; }
+.modal-narrow .rc-wizard-body { overflow-y: auto; max-height: 80vh; }
 .modal-body-padded { padding: 20px 24px; }
 /* --- Skeleton Height Variants --- */
 .skeleton-block--sm { height: 60px; }
@@ -618,7 +626,7 @@ input[type="checkbox"] { accent-color: var(--primary); }
 .rc-empty-preview-title { font-size: .92rem; font-weight: 600; }
 .rc-empty-preview-hint { font-size: .82rem; margin-top: 4px; }
 .rc-preview-info { margin-bottom: 12px; }
-.rc-validation-msg-block { display: block; }
+.rc-validation-msg-block { display: block !important; }
 .rc-import-error-list { margin: 8px 0 0 16px; font-size: .82rem; }
 @media print {
   @page { margin: 1.5cm; }

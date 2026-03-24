@@ -6,6 +6,7 @@ Shared by CLI and web. Neither should duplicate business logic.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -393,3 +394,99 @@ class AnalysisService:
         result = callback(event_type, progress)
         if asyncio.iscoroutine(result):
             await result
+
+    async def analyze_single_repo(
+        self,
+        config: AppConfig,
+        repo_name: str,
+    ) -> RepositoryAnalysis | None:
+        """Re-analyze a single repository and return updated analysis.
+
+        Returns ``None`` if the repo name is not found in config.
+        """
+        repo_config = next(
+            (r for r in config.repositories if r.name == repo_name), None,
+        )
+        if repo_config is None:
+            return None
+
+        analyzer = ReadinessAnalyzer(config)
+        matcher = BranchPatternMatcher()
+
+        url = config.resolve_repo_url(repo_config)
+
+        if is_placeholder_url(url):
+            analysis = analyzer.analyze_error(
+                repo_config, f"Placeholder URL skipped: {url}",
+            )
+            analysis.error_kind = GitErrorKind.PLACEHOLDER_URL.value
+            return analysis
+
+        try:
+            branches = await asyncio.to_thread(
+                self.git_provider.list_remote_branches,
+                url, config.settings.timeout_seconds,
+            )
+
+            pattern = config.resolve_branch_pattern(repo_config)
+            resolved = matcher.resolve(
+                pattern,
+                config.release.target_month,
+                config.release.target_year,
+            )
+
+            branch_info = await asyncio.to_thread(
+                self.git_provider.get_branch_info,
+                url, resolved.resolved_name,
+                config.settings.timeout_seconds,
+            )
+
+            default_branch_info = None
+            matching = matcher.find_matching(branches, resolved)
+            if not matching and hasattr(self.git_provider, "get_default_branch_info"):
+                with contextlib.suppress(Exception):
+                    default_branch_info = await asyncio.to_thread(
+                        self.git_provider.get_default_branch_info,
+                        url, config.settings.timeout_seconds,
+                    )
+
+            analysis = analyzer.analyze(
+                repo_config, branches, branch_info, default_branch_info,
+            )
+
+            # GitLab tag enrichment
+            if analysis.branch_exists and is_gitlab_url(url):
+                analyzed_branch = (
+                    analysis.branch.name
+                    if analysis.branch
+                    else resolved.resolved_name
+                )
+                try:
+                    gl: GitLabProvider
+                    if isinstance(self.git_provider, SmartGitProvider):
+                        gl = self.git_provider.gitlab_provider
+                    else:
+                        gl = GitLabProvider()
+                    tag_info = await asyncio.to_thread(
+                        gl.get_latest_branch_tag,
+                        url, analyzed_branch,
+                        config.settings.timeout_seconds,
+                    )
+                    analysis.latest_tag = tag_info
+                except Exception:
+                    pass
+
+            return analysis
+
+        except GitAccessError as exc:
+            analysis = analyzer.analyze_error(
+                repo_config, exc.user_message,
+            )
+            analysis.error_kind = exc.kind.value
+            analysis.error_detail = exc.detail
+            return analysis
+
+        except Exception as exc:
+            return analyzer.analyze_error(
+                repo_config, f"Unexpected: {exc}",
+            )

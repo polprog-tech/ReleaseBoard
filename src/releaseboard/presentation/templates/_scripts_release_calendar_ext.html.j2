@@ -486,10 +486,14 @@
       var view = document.getElementById('rcDashboardView');
       var container = document.getElementById('rcDashboardTable');
       var title = document.getElementById('rcDashboardTitle');
+      var actions = document.getElementById('rcDashboardActions');
+      var emptyState = document.getElementById('rcEmptyState');
       if (!view || !container) return;
       
       I._loadFromServer().then(function(existing) {
-        if (existing && existing.release_calendar && I._calHasData(existing.release_calendar)) {
+        var hasCal = existing && existing.release_calendar && I._calHasData(existing.release_calendar);
+        
+        if (hasCal) {
           var cal = existing.release_calendar;
           if (title && cal.name) title.textContent = cal.name;
           
@@ -506,6 +510,9 @@
           }
           
           container.innerHTML = html;
+          container.style.display = '';
+          if (actions) { actions.style.display = 'flex'; actions.style.gap = '8px'; }
+          if (emptyState) emptyState.classList.add('hidden');
           view.classList.remove('hidden');
 
           // Update toolbar drop downs context iteratively
@@ -526,6 +533,13 @@
           if (typeof localizeDirect === 'function') {
             localizeDirect();
           }
+        } else {
+          /* No calendar — show empty state with Create button */
+          container.style.display = 'none';
+          if (actions) actions.style.display = 'none';
+          if (emptyState) emptyState.classList.remove('hidden');
+          view.classList.remove('hidden');
+          if (typeof localizeDirect === 'function') localizeDirect();
         }
       });
     }, 100);

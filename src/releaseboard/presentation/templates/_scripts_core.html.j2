@@ -4,7 +4,7 @@
    ============================================================ */
 const REPO_DATA = {
 {% for repo in vm.all_repos %}
-  "{{ repo.name|e }}": {name:"{{ repo.name|e }}",url:"{{ repo.url|e }}",layer:"{{ repo.layer|e }}",layerLabel:"{{ repo.layer_label|e }}",status:"{{ repo.status }}",statusLabel:"{{ repo.status_label|e }}",statusColorBg:"{{ repo.status_color_bg }}",statusBadgeBg:"{{ repo.status_badge_bg }}",statusBadgeFg:"{{ repo.status_badge_fg }}",expectedBranch:"{{ repo.expected_branch|e }}",actualBranch:"{{ repo.actual_branch|e }}",namingValid:{{ 'true' if repo.naming_valid else 'false' }},isStale:{{ 'true' if repo.is_stale else 'false' }},lastActivity:"{{ repo.last_activity|e }}",firstActivity:"{{ repo.first_activity|e }}",lastAuthor:"{{ repo.last_author|e }}",lastMessage:"{{ repo.last_message|e }}",commitCount:"{{ repo.commit_count }}",freshness:"{{ repo.freshness|e }}",branchExists:{{ 'true' if repo.branch_exists else 'false' }},warnings:{{ repo.warnings|tojson }},notes:{{ repo.notes|tojson }},errorMessage:"{{ repo.error_message|e }}",errorKind:"{{ repo.error_kind|e }}",errorDetail:"{{ repo.error_detail|e }}",repoDefaultBranch:"{{ repo.repo_default_branch|e }}",repoVisibility:"{{ repo.repo_visibility|e }}",repoDescription:"{{ repo.repo_description|e }}",repoWebUrl:"{{ repo.repo_web_url|e }}",repoOwner:"{{ repo.repo_owner|e }}",dataSource:"{{ repo.data_source|e }}",latestTag:"{{ repo.latest_tag|e }}",latestTagSha:"{{ repo.latest_tag_sha|e }}",latestTagDate:"{{ repo.latest_tag_date|e }}",latestTagMessage:"{{ repo.latest_tag_message|e }}",isGitlab:{{ 'true' if repo.is_gitlab else 'false' }}},
+  "{{ repo.name|e }}": {name:"{{ repo.name|e }}",url:"{{ repo.url|e }}",layer:"{{ repo.layer|e }}",layerLabel:"{{ repo.layer_label|e }}",status:"{{ repo.status }}",statusLabel:"{{ repo.status_label|e }}",statusColorBg:"{{ repo.status_color_bg }}",statusBadgeBg:"{{ repo.status_badge_bg }}",statusBadgeFg:"{{ repo.status_badge_fg }}",expectedBranch:"{{ repo.expected_branch|e }}",actualBranch:"{{ repo.actual_branch|e }}",namingValid:{{ 'true' if repo.naming_valid else 'false' }},isStale:{{ 'true' if repo.is_stale else 'false' }},lastActivity:"{{ repo.last_activity|e }}",firstActivity:"{{ repo.first_activity|e }}",lastAuthor:{{ repo.last_author|tojson }},lastMessage:{{ repo.last_message|tojson }},commitCount:"{{ repo.commit_count }}",freshness:"{{ repo.freshness|e }}",branchExists:{{ 'true' if repo.branch_exists else 'false' }},warnings:{{ repo.warnings|tojson }},notes:{{ repo.notes|tojson }},errorMessage:{{ repo.error_message|tojson }},errorKind:"{{ repo.error_kind|e }}",errorDetail:{{ repo.error_detail|tojson }},repoDefaultBranch:"{{ repo.repo_default_branch|e }}",repoVisibility:"{{ repo.repo_visibility|e }}",repoDescription:{{ repo.repo_description|tojson }},repoWebUrl:"{{ repo.repo_web_url|e }}",repoOwner:"{{ repo.repo_owner|e }}",dataSource:"{{ repo.data_source|e }}",latestTag:"{{ repo.latest_tag|e }}",latestTagSha:"{{ repo.latest_tag_sha|e }}",latestTagDate:"{{ repo.latest_tag_date|e }}",latestTagMessage:{{ repo.latest_tag_message|tojson }},isGitlab:{{ 'true' if repo.is_gitlab else 'false' }}},
 {% endfor %}
 };
 
@@ -322,5 +322,48 @@ function closeModal(){
 
     section.classList.remove('hidden');
   } catch(e) { console.error('Milestones init:', e); }
+})();
+
+/* --- Table Column Sorting --- */
+(function() {
+  document.querySelectorAll('.sortable-table th[data-sortable]').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var table = th.closest('table');
+      if (!table) return;
+      var tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      var colIdx = Array.prototype.indexOf.call(th.parentNode.children, th);
+
+      // Toggle sort direction
+      var dir = 'asc';
+      if (th.classList.contains('sort-asc')) dir = 'desc';
+      // Clear all sort classes on sibling headers
+      th.parentNode.querySelectorAll('th').forEach(function(h) {
+        h.classList.remove('sort-asc', 'sort-desc');
+      });
+      th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+
+      // Gather rows
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      rows.sort(function(a, b) {
+        var cellA = a.children[colIdx];
+        var cellB = b.children[colIdx];
+        if (!cellA || !cellB) return 0;
+        var ka = (cellA.getAttribute('data-sort-key') || cellA.textContent).trim().toLowerCase();
+        var kb = (cellB.getAttribute('data-sort-key') || cellB.textContent).trim().toLowerCase();
+        // Try numeric comparison first
+        var na = parseFloat(ka), nb = parseFloat(kb);
+        if (!isNaN(na) && !isNaN(nb)) {
+          return dir === 'asc' ? na - nb : nb - na;
+        }
+        if (ka < kb) return dir === 'asc' ? -1 : 1;
+        if (ka > kb) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      // Re-append in sorted order (preserves event listeners)
+      rows.forEach(function(r) { tbody.appendChild(r); });
+    });
+  });
 })();
 

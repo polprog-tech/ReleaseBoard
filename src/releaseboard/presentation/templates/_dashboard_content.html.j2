@@ -74,12 +74,21 @@
   <section class="dashboard-section hidden" id="rcDashboardView" data-section-id="release-calendar" data-section-label="Release Calendar">
     <div class="env-milestones-header">
       <h3 class="section-heading" id="rcDashboardTitle" data-i18n="rc.dashboard.title">📅 Release Calendar</h3>
-      <div class="rc-dashboard-actions" id="rcDashboardActions" style="display:flex;gap:8px;">
+      <div class="rc-dashboard-actions" id="rcDashboardActions" style="display:none;gap:8px;">
         <button class="row-action-btn edit" onclick="RC.editCalendar()" data-i18n="rc.toolbar.edit_calendar">Edit Calendar</button>
         <button class="row-action-btn danger" onclick="RC.deleteCalendar()" data-i18n="rc.delete.title">Delete Calendar</button>
       </div>
     </div>
     <div id="rcDashboardTable"></div>
+    <!-- Empty state: shown when no calendar exists -->
+    <div id="rcEmptyState" class="hidden" style="text-align:center;padding:40px 20px;">
+      <div style="font-size:2.5rem;margin-bottom:12px;">📅</div>
+      <div style="font-size:1rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;" data-i18n="rc.empty.title">No Release Calendar</div>
+      <div style="font-size:.85rem;color:var(--text-tertiary);margin-bottom:16px;" data-i18n="rc.empty.description">Create a release calendar to track milestones, freezes, and deployment dates.</div>
+      <button class="tb-btn primary" onclick="RC.openWizard()" style="font-size:.9rem;padding:8px 20px;">
+        ➕ <span data-i18n="rc.empty.create_btn">Create Release Calendar</span>
+      </button>
+    </div>
   </section>
   {% endif %}
 
@@ -106,13 +115,13 @@
   <!-- ===== Attention ===== -->
   {% if vm.attention_items %}
   <section class="attention-section dashboard-section" data-section-id="attention" data-section-label="Needs Attention"><h3><span class="status-dot-indicator status-dot-indicator--error"></span> <span data-i18n="ui.needs_attention">Needs Attention</span></h3>
-    <div class="repo-table-container"><table class="repo-table"><thead><tr><th scope="col" data-i18n="ui.table.repository">Repository</th><th scope="col" data-i18n="ui.table.layer">Layer</th><th scope="col" data-i18n="ui.table.status">Status</th><th scope="col" data-i18n="ui.table.expected_branch">Expected Branch</th><th scope="col" data-i18n="ui.table.issue">Issue</th></tr></thead><tbody>
+    <div class="repo-table-container"><table class="repo-table sortable-table"><thead><tr><th scope="col" data-sortable data-i18n="ui.table.repository">Repository</th><th scope="col" data-sortable data-i18n="ui.table.layer">Layer</th><th scope="col" data-sortable data-i18n="ui.table.status">Status</th><th scope="col" data-sortable data-i18n="ui.table.expected_branch">Expected Branch</th><th scope="col" data-i18n="ui.table.issue">Issue</th></tr></thead><tbody>
       {% for repo in vm.attention_items %}
       <tr class="repo-row" data-repo="{{ repo.name }}" data-layer="{{ repo.layer }}" data-status="{{ repo.status }}">
-        <td><span class="repo-name">{{ repo.name }}</span></td>
-        <td><span class="text-sm text-muted">{{ repo.layer_label }}</span></td>
-        <td><span class="status-badge" style="background:{{ repo.status_badge_bg }};color:{{ repo.status_badge_fg }};"><span class="status-dot" aria-hidden="true" style="background:{{ repo.status_color_bg }};"></span>{{ repo.status_label }}</span></td>
-        <td><code class="branch-name">{{ repo.expected_branch }}</code></td>
+        <td data-sort-key="{{ repo.name|lower }}"><span class="repo-name">{{ repo.name }}</span></td>
+        <td data-sort-key="{{ repo.layer_label|lower }}"><span class="text-sm text-muted">{{ repo.layer_label }}</span></td>
+        <td data-sort-key="{{ repo.status_severity }}"><span class="status-badge" style="background:{{ repo.status_badge_bg }};color:{{ repo.status_badge_fg }};"><span class="status-dot" aria-hidden="true" style="background:{{ repo.status_color_bg }};"></span>{{ repo.status_label }}</span></td>
+        <td data-sort-key="{{ repo.expected_branch|lower }}"><code class="branch-name">{{ repo.expected_branch }}</code></td>
         <td class="text-sm text-muted">{% if repo.warnings %}{{ repo.warnings[0] }}{% elif repo.error_message %}{{ repo.error_message }}{% else %}—{% endif %}</td>
       </tr>
       {% endfor %}
@@ -134,18 +143,19 @@
       </div>
     </div>
     <div class="readiness-bar-container"><div class="readiness-bar"><div class="readiness-bar-fill" style="width:{{ layer.readiness_pct }}%;background:{{ layer.color }};"></div></div></div>
-    <div class="repo-table-container"><table class="repo-table"><thead><tr><th scope="col" data-i18n="ui.table.repository">Repository</th><th scope="col" data-i18n="ui.table.status">Status</th><th scope="col" data-i18n="ui.table.release_branch">Branch</th><th scope="col" data-i18n="ui.table.naming">Naming</th><th scope="col" data-i18n="ui.table.last_activity">Last Activity</th><th scope="col" data-i18n="ui.table.freshness">Freshness</th><th scope="col" data-i18n="ui.table.latest_tag">Latest Tag</th>{% if vm.interactive %}<th scope="col" class="col-actions" data-i18n="ui.table.actions">Actions</th>{% endif %}</tr></thead><tbody>
+    <div class="repo-table-container"><table class="repo-table sortable-table"><thead><tr><th scope="col" data-sortable data-i18n="ui.table.repository">Repository</th><th scope="col" data-sortable data-i18n="ui.table.status">Status</th><th scope="col" data-sortable data-i18n="ui.table.release_branch">Branch</th><th scope="col" data-sortable data-i18n="ui.table.naming">Naming</th><th scope="col" data-sortable data-i18n="ui.table.last_activity">Last Activity</th><th scope="col" data-sortable data-i18n="ui.table.freshness">Freshness</th><th scope="col" data-sortable data-i18n="ui.table.latest_tag">Latest Tag</th>{% if vm.interactive %}<th scope="col" class="col-actions" data-i18n="ui.table.actions">Actions</th>{% endif %}</tr></thead><tbody>
       {% for repo in layer.repos %}
       <tr class="repo-row filterable-row" data-repo="{{ repo.name }}" data-layer="{{ repo.layer }}" data-status="{{ repo.status }}" data-naming="{{ 'valid' if repo.naming_valid else 'invalid' }}" onclick="showDetail('{{ repo.name|e }}')">
-        <td><div class="repo-name">{{ repo.name }}</div><div class="repo-name-sub">{{ repo.url }}</div></td>
-        <td><span class="status-badge" style="background:{{ repo.status_badge_bg }};color:{{ repo.status_badge_fg }};"><span class="status-dot" aria-hidden="true" style="background:{{ repo.status_color_bg }};"></span>{{ repo.status_label }}</span></td>
-        <td>{% if repo.branch_exists %}<code class="branch-name">{{ repo.actual_branch }}</code>{% else %}<span class="text-sm text-muted">—</span>{% endif %}</td>
-        <td>{% if repo.branch_exists %}{% if repo.naming_valid %}<span class="check-icon">✓</span>{% else %}<span class="cross-icon">✗</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td><span class="text-sm">{{ repo.last_activity }}</span></td>
-        <td><span class="text-sm text-muted">{{ repo.freshness }}</span></td>
-        <td>{% if repo.is_gitlab %}{% if repo.latest_tag %}<code class="branch-name tag-name" title="{{ repo.latest_tag_date }}{% if repo.latest_tag_message %} — {{ repo.latest_tag_message }}{% endif %}">{{ repo.latest_tag }}</code>{% else %}<span class="text-sm text-muted" data-i18n="ui.table.latest_tag.no_tag">No tag</span>{% endif %}{% else %}<span class="text-sm text-muted" data-i18n="ui.table.latest_tag.na">N/A</span>{% endif %}</td>
+        <td data-sort-key="{{ repo.name|lower }}"><div class="repo-name">{{ repo.name }}</div><div class="repo-name-sub">{{ repo.url }}</div></td>
+        <td data-sort-key="{{ repo.status_severity }}"><span class="status-badge" style="background:{{ repo.status_badge_bg }};color:{{ repo.status_badge_fg }};"><span class="status-dot" aria-hidden="true" style="background:{{ repo.status_color_bg }};"></span>{{ repo.status_label }}</span></td>
+        <td data-sort-key="{{ repo.actual_branch|lower if repo.branch_exists else 'zzz' }}">{% if repo.branch_exists %}<code class="branch-name">{{ repo.actual_branch }}</code>{% else %}<span class="text-sm text-muted">—</span>{% endif %}</td>
+        <td data-sort-key="{{ '0' if repo.naming_valid else '1' if repo.branch_exists else '2' }}">{% if repo.branch_exists %}{% if repo.naming_valid %}<span class="check-icon">✓</span>{% else %}<span class="cross-icon">✗</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td data-sort-key="{{ repo.last_activity_raw or '0000' }}"><span class="text-sm">{{ repo.last_activity }}</span></td>
+        <td data-sort-key="{{ repo.last_activity_raw or '0000' }}"><span class="text-sm text-muted">{{ repo.freshness }}</span></td>
+        <td data-sort-key="{{ repo.latest_tag|lower if repo.latest_tag else 'zzz' }}">{% if repo.is_gitlab %}{% if repo.latest_tag %}<code class="branch-name tag-name" title="{{ repo.latest_tag_date }}{% if repo.latest_tag_message %} — {{ repo.latest_tag_message }}{% endif %}">{{ repo.latest_tag }}</code>{% else %}<span class="text-sm text-muted" data-i18n="ui.table.latest_tag.no_tag">No tag</span>{% endif %}{% else %}<span class="text-sm text-muted" data-i18n="ui.table.latest_tag.na">N/A</span>{% endif %}</td>
         {% if vm.interactive %}
         <td onclick="event.stopPropagation()"><div class="row-actions">
+          <button class="row-action-btn refresh" onclick="RB.refreshRepo('{{ repo.name|e }}')" data-i18n-title="ui.btn.refresh_tooltip" title="Re-analyze this repository">🔄</button>
           <button class="rp-action-btn" onclick="RP.openWizard('{{ repo.name|e }}')" data-i18n-title="rp.action.prepare_release_tooltip" title="Generate release notes for this repository"><span data-i18n="rp.action.prepare">Release Notes</span></button>
           <button class="row-action-btn edit" onclick="RB.editRepoByName('{{ repo.name|e }}')" data-i18n="ui.btn.edit">Edit</button>
           <button class="row-action-btn danger" onclick="RB.deleteRepoByName('{{ repo.name|e }}')" data-i18n="ui.btn.delete">Delete</button>

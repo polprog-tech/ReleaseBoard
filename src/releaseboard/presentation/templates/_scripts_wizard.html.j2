@@ -346,17 +346,22 @@
             <ul>${WIZ.warnings.map(w => '<li>' + esc(w) + '</li>').join('')}</ul>
           </div>
         `);
+        nextBtn.disabled = true;
+        nextBtn.title = _t('ui.wizard.fix_errors_hint') || 'Fix the errors above before continuing';
+        nextBtn.textContent = _t('ui.wizard.next_btn') || 'Next →';
+      } else {
+        nextBtn.disabled = false;
+        nextBtn.title = '';
+        nextBtn.textContent = _t('ui.wizard.next_btn');
       }
-
-      nextBtn.disabled = false;
-      nextBtn.textContent = _t('ui.wizard.next_btn');
     } catch (err) {
       area.insertAdjacentHTML('beforeend', `
         <div class="wiz-warnings">
           <strong>${esc(_t('ui.wizard.scan_error'))}:</strong> ${esc(err.message)}
         </div>
       `);
-      nextBtn.disabled = false;
+      nextBtn.disabled = true;
+      nextBtn.title = _t('ui.wizard.fix_errors_hint') || 'Fix the errors above before continuing';
     }
   }
 
@@ -430,13 +435,19 @@
   /* ---------- Step 4: Confirm / Apply ---------- */
   function wizRenderConfirm() {
     const warnEl = document.getElementById('wizWarnings');
-    if (WIZ.warnings.length) {
+    const hasWarnings = WIZ.warnings && WIZ.warnings.length > 0;
+    if (hasWarnings) {
       warnEl.classList.remove('hidden');
       warnEl.style.display = '';
       warnEl.innerHTML = `<strong>\u26a0 ${esc(_t('ui.wizard.warnings'))}:</strong><ul>${WIZ.warnings.map(w => '<li>' + esc(w) + '</li>').join('')}</ul>`;
     } else {
       warnEl.style.display = 'none';
     }
+    const replBtn = document.getElementById('wizBtnReplace');
+    const mergeBtn = document.getElementById('wizBtnMerge');
+    const hint = hasWarnings ? (_t('ui.wizard.fix_errors_hint') || 'Fix discovery errors before applying') : '';
+    if (replBtn) { replBtn.disabled = hasWarnings; replBtn.title = hint; }
+    if (mergeBtn) { mergeBtn.disabled = hasWarnings; mergeBtn.title = hint; }
   }
 
   async function wizApply(mode) {

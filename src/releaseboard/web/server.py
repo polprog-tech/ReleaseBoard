@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from releaseboard import __version__
+from releaseboard.analysis.metrics import compute_dashboard_metrics
 from releaseboard.application.service import AnalysisPhase, AnalysisService
 from releaseboard.config.schema import validate_config, validate_layer_references
 from releaseboard.git.github_provider import GitHubProvider, parse_github_owner
@@ -691,6 +692,61 @@ def create_app(
         task.add_done_callback(_background_tasks.discard)
         return JSONResponse({"ok": True, "message": t("api.analysis_started", locale=locale)})
 
+    @app.post("/api/analyze/repo")
+    async def analyze_single_repo(request: Request) -> JSONResponse:
+        """Re-analyze a single repository by name.
+
+        Expects JSON body ``{"repo": "<name>"}``.  Updates the
+        existing analysis result in-place without a full re-run.
+        """
+        if state is None:
+            return JSONResponse(
+                {"ok": False, "error": "No configuration loaded"},
+                status_code=503,
+            )
+        body = await _read_json_body(request)
+        repo_name = (body.get("repo") or "").strip()
+        if not repo_name:
+            return JSONResponse(
+                {"ok": False, "error": "Missing 'repo' in body"},
+                status_code=400,
+            )
+
+        config = state.get_active_config()
+        analysis = await service.analyze_single_repo(config, repo_name)
+        if analysis is None:
+            return JSONResponse(
+                {"ok": False, "error": f"Repository '{repo_name}' not found in config"},
+                status_code=404,
+            )
+
+        # Merge result into existing analysis result
+        if state.analysis_result:
+            new_list = [
+                analysis if a.name == repo_name else a
+                for a in state.analysis_result.analyses
+            ]
+            # If the repo wasn't in the existing list, append it
+            if not any(a.name == repo_name for a in state.analysis_result.analyses):
+                new_list.append(analysis)
+            layer_labels = {layer.id: layer.label for layer in config.layers}
+            state.analysis_result.analyses = new_list
+            state.analysis_result.metrics = compute_dashboard_metrics(
+                new_list, layer_labels,
+            )
+            import datetime as _dtmod
+            state.analysis_result.timestamp = _dtmod.datetime.now(
+                tz=_dtmod.UTC,
+            )
+
+        return JSONResponse({
+            "ok": True,
+            "name": analysis.name,
+            "status": analysis.status.value,
+            "branch_exists": analysis.branch_exists,
+            "error_message": analysis.error_message or "",
+        })
+
     @app.post("/api/analyze/cancel")
     async def cancel_analysis(request: Request) -> JSONResponse:
         """Request cancellation of the running analysis."""
@@ -887,6 +943,50 @@ def create_app(
     async def health_live() -> JSONResponse:
         """Liveness probe — confirms the process is running."""
         return JSONResponse({"status": "alive"})
+
+    @app.get("/api/browse/dirs")
+    async def browse_dirs(path: str = "") -> JSONResponse:
+        """Browse local directories and detect git repos."""
+        import os
+
+        base = path.strip() or os.path.expanduser("~")
+        base = os.path.expanduser(base)
+        if not os.path.isdir(base):
+            return JSONResponse({"ok": False, "error": "Not a directory"})
+
+        items: list[dict] = []
+        parent = os.path.dirname(base)
+        if parent != base:
+            items.append({"name": "..", "path": parent, "is_git": False})
+
+        try:
+            entries = sorted(os.scandir(base), key=lambda e: e.name.lower())
+        except PermissionError:
+            return JSONResponse({"ok": False, "error": "Permission denied"})
+
+        for entry in entries:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            if entry.name.startswith("."):
+                continue
+            ep = entry.path
+            is_git = os.path.isdir(os.path.join(ep, ".git")) or (
+                os.path.isfile(os.path.join(ep, "HEAD"))
+                and os.path.isdir(os.path.join(ep, "refs"))
+            )
+            items.append({"name": entry.name, "path": ep, "is_git": is_git})
+
+        cur_is_git = os.path.isdir(os.path.join(base, ".git")) or (
+            os.path.isfile(os.path.join(base, "HEAD"))
+            and os.path.isdir(os.path.join(base, "refs"))
+        )
+
+        return JSONResponse({
+            "ok": True,
+            "current": base,
+            "is_git": cur_is_git,
+            "items": items,
+        })
 
     @app.get("/health/ready")
     async def health_ready() -> JSONResponse:

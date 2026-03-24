@@ -331,7 +331,7 @@
             <div class="cfg-field"><label class="cfg-label">${_t('ui.config.name_label')}<span class="required-star">*</span> ${nameIndicator}</label><input class="cfg-input" data-path="repositories.${i}.name" value="${r.name||''}" onchange="RB.updateRepoName(${i},this.value)" oninput="RB.clearDraftFlag(${i})"></div>
             <div class="cfg-field"><label class="cfg-label">${_t('ui.config.layer_label')}</label><select class="cfg-select" data-path="repositories.${i}.layer" onchange="RB.updateRepo(${i},'layer',this.value);RB.renderRepos()">${layerOpts.replace('value="'+r.layer+'"','value="'+r.layer+'" selected')}</select></div>
           </div>
-          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.url_slug_label')}<span class="required-star">*</span></label><input class="cfg-input text-mono" data-path="repositories.${i}.url" value="${r.url||''}" oninput="RB.autoFillRepoName(${i},this.value);RB.clearDraftFlag(${i})" onchange="RB.updateRepo(${i},'url',this.value);RB.autoFillRepoName(${i},this.value)"><div class="cfg-help">${_t('ui.config.url_field_help')}</div><div class="effective-value">\u2192 ${esc(effUrl)}</div></div>
+          <div class="cfg-field"><label class="cfg-label">${_t('ui.config.url_slug_label')}<span class="required-star">*</span></label><div style="display:flex;gap:6px;align-items:flex-start;"><input class="cfg-input text-mono" style="flex:1;" data-path="repositories.${i}.url" value="${r.url||''}" placeholder="https://github.com/org/repo  or  /path/to/local/repo" oninput="RB.autoFillRepoName(${i},this.value);RB.clearDraftFlag(${i})" onchange="RB.updateRepo(${i},'url',this.value);RB.autoFillRepoName(${i},this.value)"><button type="button" class="tb-btn" style="white-space:nowrap;padding:7px 10px;font-size:12px;" onclick="RB.browseLocalRepo(${i})" title="${_t('ui.config.browse_local')}">📁 Local</button></div><div class="cfg-help">${_t('ui.config.url_field_help')}</div><div class="effective-value">\u2192 ${esc(effUrl)}</div></div>
           <div class="cfg-row">
             <div class="cfg-field"><label class="cfg-label">${_t('ui.config.branch_pattern')}</label><input class="cfg-input text-mono${!hasRepoOverride ? ' cfg-inherited' : ''}" data-path="repositories.${i}.branch_pattern" value="${hasRepoOverride ? r.branch_pattern : (layerPat || globalPat)}" placeholder="${esc(branchPlaceholder || effBranch)}" onchange="RB.updateRepo(${i},'branch_pattern',this.value||undefined);RB.renderRepos()"><div class="effective-value">\u2192 ${esc(effBranch)} ${branchTag}</div></div>
             <div class="cfg-field"><label class="cfg-label">${_t('ui.config.default_branch_label')}</label><input class="cfg-input" data-path="repositories.${i}.default_branch" value="${r.default_branch||'main'}" onchange="RB.updateRepo(${i},'default_branch',this.value)"></div>
@@ -455,6 +455,44 @@
   }
 
   /* --- Inline table actions --- */
+  async function refreshRepo(name) {
+    /* Re-analyze a single repo without full re-run */
+    var row = document.querySelector('.repo-row[data-repo="' + name + '"]');
+    var btn = row ? row.querySelector('.row-action-btn.refresh') : null;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    /* Apply skeleton effect to all cells except actions */
+    if (row) {
+      var cells = row.querySelectorAll('td');
+      cells.forEach(function(td) {
+        if (td.querySelector('.row-action-btn')) return;
+        td.dataset.origHtml = td.innerHTML;
+        td.innerHTML = '<div class="skeleton skeleton-text" style="height:14px;width:80%;margin:4px 0;"></div>';
+      });
+    }
+    try {
+      var _hdrs = {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'};
+      var resp = await fetch('/api/analyze/repo', {
+        method: 'POST', headers: _hdrs,
+        body: JSON.stringify({repo: name})
+      });
+      var data = await resp.json();
+      if (data.ok) {
+        if (typeof showToast === 'function') showToast(name + ': ' + data.status, 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+      } else {
+        if (typeof showToast === 'function') showToast(data.error || 'Refresh failed', 'error');
+        _restoreRow(row, btn);
+      }
+    } catch(e) {
+      if (typeof showToast === 'function') showToast('Network error', 'error');
+      _restoreRow(row, btn);
+    }
+  }
+  function _restoreRow(row, btn) {
+    if (row) { row.querySelectorAll('td[data-orig-html]').forEach(function(td) { td.innerHTML = td.dataset.origHtml; delete td.dataset.origHtml; }); }
+    if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+  }
+
   function editRepoByName(name){
     const idx = (draft.repositories||[]).findIndex(r=>r.name===name);
     if(idx<0) return;
@@ -464,6 +502,67 @@
       const el = document.querySelector('.repo-accordion[data-repo-idx="'+idx+'"]');
       if(el){ el.classList.add('open'); el.scrollIntoView({behavior:'smooth',block:'center'}); }
     }, 300);
+  }
+
+  /* --- Browse local directories for git repos --- */
+  var _browseRepoIdx = -1;
+  async function browseLocalRepo(repoIdx) {
+    _browseRepoIdx = repoIdx;
+    _browseDirOpen('');
+  }
+  async function _browseDirOpen(dirPath) {
+    var resp; try { resp = await fetch('/api/browse/dirs?path=' + encodeURIComponent(dirPath)); } catch(e) { if(typeof showToast==='function') showToast('Cannot browse directories','error'); return; }
+    var data = await resp.json();
+    if (!data.ok) { if(typeof showToast==='function') showToast(data.error||'Browse error','error'); return; }
+    var items = data.items || [];
+    var curPath = data.current || '';
+    var curIsGit = data.is_git || false;
+    var html = '<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;word-break:break-all;">📂 ' + esc(curPath) + '</div>';
+    if (curIsGit) {
+      html += '<div style="margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--success,#16a34a) 10%, transparent);border:1px solid var(--success,#16a34a);border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px;">';
+      html += '<span>📦</span><span style="flex:1;font-size:13px;font-weight:600;color:var(--success,#16a34a);">Git repository detected</span>';
+      html += '<button class="tb-btn primary" style="padding:5px 14px;font-size:12px;" onclick="RB._browseSelect(\'' + esc(curPath).replace(/'/g,"\\'") + '\')">✔ Use this repo</button>';
+      html += '</div>';
+    }
+    html += '<div style="max-height:350px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input);">';
+    items.forEach(function(it) {
+      var icon = it.name === '..' ? '⬆️' : (it.is_git ? '📦' : '📁');
+      var cls = it.is_git ? 'font-weight:600;color:var(--success,#16a34a);' : '';
+      html += '<div class="browse-dir-item" style="padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-subtle,#eee);' + cls + '" data-path="' + esc(it.path) + '">';
+      html += '<span>' + icon + '</span><span style="flex:1;font-size:13px;">' + esc(it.name) + '</span>';
+      if (it.is_git) html += '<button class="tb-btn primary" style="padding:3px 10px;font-size:11px;" onclick="event.stopPropagation();RB._browseSelect(\'' + esc(it.path).replace(/'/g,"\\'") + '\')">Select</button>';
+      html += '</div>';
+    });
+    if (!items.length) html += '<div style="padding:16px;text-align:center;color:var(--text-tertiary);font-size:13px;">No subdirectories found</div>';
+    html += '</div>';
+    window.showModal({
+      title: '📁 ' + (_t('ui.config.browse_local') || 'Browse Local Repositories'),
+      desc: html,
+      buttons: [{ label: _t('ui.cancel') || 'Cancel', cls: 'cancel' }]
+    });
+    setTimeout(function() {
+      document.querySelectorAll('.browse-dir-item').forEach(function(el) {
+        el.addEventListener('click', function() {
+          window.closeModal(); _browseDirOpen(el.dataset.path);
+        });
+      });
+    }, 50);
+  }
+  function _browseSelect(selectedPath) {
+    window.closeModal();
+    var i = _browseRepoIdx;
+    if (i < 0 || !draft.repositories || !draft.repositories[i]) return;
+    draft.repositories[i].url = selectedPath;
+    /* Force auto-name from selected path */
+    var derived = deriveNameFromUrl(selectedPath);
+    if (derived) { draft.repositories[i].name = derived; draft.repositories[i]._autoName = true; }
+    renderRepos();
+    validateDraft();
+    setTimeout(function() {
+      var el = document.querySelector('.repo-accordion[data-repo-idx="'+i+'"]');
+      if (el) { el.classList.add('open'); el.scrollIntoView({behavior:'smooth',block:'center'}); }
+    }, 50);
+    if (typeof showToast==='function') showToast((derived || selectedPath) + ' — ' + (_t('ui.config.local_repo_selected')||'Local repository selected'),'success');
   }
 
   let pendingDeleteIdx = -1;
