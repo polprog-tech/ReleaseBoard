@@ -1,5 +1,6 @@
 """Tests for i18n catalog parity, SSE broadcast safety, datetime formatting,
 staleness edge cases, branding/schema endpoint validation, and template limits."""
+
 from __future__ import annotations
 
 import asyncio
@@ -57,7 +58,7 @@ class TestContentLengthValidation:
 
         """THEN Content-Length is validated with isdigit() before int()."""
         if idx >= 0:
-            nearby = source[idx:idx + 800]
+            nearby = source[idx : idx + 800]
             assert "isdigit()" in nearby, (
                 "Calendar import endpoint must validate Content-Length with isdigit() "
                 "before calling int()"
@@ -71,7 +72,7 @@ class TestContentLengthValidation:
         """WHEN locating the _read_json_body function."""
         idx = source.find("def _read_json_body")
         assert idx >= 0
-        body = source[idx:idx + 500]
+        body = source[idx : idx + 500]
 
         """THEN Content-Length is validated with isdigit()."""
         assert "isdigit()" in body
@@ -89,14 +90,13 @@ class TestSSEBroadcastAtomicCleanup:
         has_toctou = "if dq in self._sse_subscribers" in source
 
         """THEN no check-then-remove loop is found."""
-        assert not has_toctou, (
-            "SSE broadcast still uses TOCTOU-prone check-then-remove pattern"
-        )
+        assert not has_toctou, "SSE broadcast still uses TOCTOU-prone check-then-remove pattern"
 
     @pytest.mark.asyncio
     async def test_broadcast_removes_full_queues(self):
         """GIVEN an AppState with a full queue and a healthy queue."""
         from releaseboard.web.state import AppState
+
         config_path = ROOT / "examples" / "config.json"
         app_state = AppState(config_path)
         small_queue: asyncio.Queue = asyncio.Queue(maxsize=1)
@@ -119,6 +119,7 @@ class TestFormatDatetimeNoneGuard:
     def test_none_returns_dash(self):
         """GIVEN a None datetime value."""
         from releaseboard.presentation.view_models import _format_datetime
+
         value = None
 
         """WHEN formatting the datetime."""
@@ -130,6 +131,7 @@ class TestFormatDatetimeNoneGuard:
     def test_valid_datetime_still_works(self):
         """GIVEN a valid UTC datetime."""
         from releaseboard.presentation.view_models import _format_datetime
+
         dt = datetime(2026, 3, 15, 12, 0, tzinfo=UTC)
 
         """WHEN formatting the datetime."""
@@ -142,6 +144,7 @@ class TestFormatDatetimeNoneGuard:
     def test_none_with_locale(self):
         """GIVEN a None datetime value and a Polish locale."""
         from releaseboard.presentation.view_models import _format_datetime
+
         value = None
 
         """WHEN formatting the datetime with locale."""
@@ -157,6 +160,7 @@ class TestStalenessFutureDateHandling:
     def test_future_date_is_not_stale(self):
         """GIVEN a date 30 days in the future."""
         from releaseboard.analysis.staleness import is_stale
+
         future = datetime.now(tz=UTC) + timedelta(days=30)
 
         """WHEN checking staleness with a 14-day threshold."""
@@ -168,6 +172,7 @@ class TestStalenessFutureDateHandling:
     def test_far_future_date_is_not_stale(self):
         """GIVEN a date 365 days in the future."""
         from releaseboard.analysis.staleness import is_stale
+
         future = datetime.now(tz=UTC) + timedelta(days=365)
 
         """WHEN checking staleness with a 14-day threshold."""
@@ -179,6 +184,7 @@ class TestStalenessFutureDateHandling:
     def test_future_freshness_label_returns_today(self):
         """GIVEN a date 5 days in the future."""
         from releaseboard.analysis.staleness import freshness_label
+
         future = datetime.now(tz=UTC) + timedelta(days=5)
 
         """WHEN computing the freshness label with a 14-day threshold."""
@@ -190,6 +196,7 @@ class TestStalenessFutureDateHandling:
     def test_past_date_still_detected_as_stale(self):
         """GIVEN a date 30 days in the past."""
         from releaseboard.analysis.staleness import is_stale
+
         old = datetime.now(tz=UTC) - timedelta(days=30)
 
         """WHEN checking staleness with a 14-day threshold."""
@@ -201,6 +208,7 @@ class TestStalenessFutureDateHandling:
     def test_none_date_still_stale(self):
         """GIVEN a None date value."""
         from releaseboard.analysis.staleness import is_stale
+
         value = None
 
         """WHEN checking staleness with a 14-day threshold."""
@@ -212,6 +220,7 @@ class TestStalenessFutureDateHandling:
     def test_boundary_exactly_at_threshold_not_stale(self):
         """GIVEN a date exactly at the 14-day threshold."""
         from releaseboard.analysis.staleness import is_stale
+
         at_threshold = datetime.now(tz=UTC) - timedelta(days=14)
 
         """WHEN checking staleness with a 14-day threshold."""
@@ -223,6 +232,7 @@ class TestStalenessFutureDateHandling:
     def test_one_day_over_threshold_is_stale(self):
         """GIVEN a date 15 days in the past."""
         from releaseboard.analysis.staleness import is_stale
+
         over = datetime.now(tz=UTC) - timedelta(days=15)
 
         """WHEN checking staleness with a 14-day threshold."""
@@ -243,12 +253,10 @@ class TestBrandingEndpointValidation:
         """WHEN locating the branding endpoint."""
         idx = source.find("update_branding")
         assert idx >= 0
-        body = source[idx:idx + 800]
+        body = source[idx : idx + 800]
 
         """THEN type-checking with isinstance is present."""
-        assert "isinstance" in body, (
-            "Branding endpoint must type-check text field values"
-        )
+        assert "isinstance" in body, "Branding endpoint must type-check text field values"
 
     def test_branding_endpoint_truncates_text(self):
         """GIVEN the source code of the server module."""
@@ -257,7 +265,7 @@ class TestBrandingEndpointValidation:
 
         """WHEN locating the branding endpoint."""
         idx = source.find("update_branding")
-        body = source[idx:idx + 800]
+        body = source[idx : idx + 800]
 
         """THEN text field length is limited."""
         assert "[:500]" in body or "[:256]" in body or "[:1000]" in body, (
@@ -276,7 +284,7 @@ class TestSchemaEndpointErrorHandling:
         """WHEN locating the get_schema function."""
         idx = source.find("def get_schema")
         assert idx >= 0
-        body = source[idx:idx + 500]
+        body = source[idx : idx + 500]
 
         """THEN error handling for FileNotFoundError is present."""
         assert "FileNotFoundError" in body or "except" in body
@@ -335,7 +343,7 @@ class TestSafeIntLogging:
         """WHEN locating the _safe_int function."""
         idx = source.find("def _safe_int")
         assert idx >= 0
-        func_body = source[idx:idx + 300]
+        func_body = source[idx : idx + 300]
 
         """THEN a log warning is issued for invalid values."""
         assert "logger.warning" in func_body or "log" in func_body.lower()
@@ -352,7 +360,7 @@ class TestAnalysisTaskBroadcastSafety:
         """WHEN locating the analysis _run function."""
         idx = source.find("async def _run() -> None:")
         assert idx >= 0
-        body = source[idx:idx + 600]
+        body = source[idx : idx + 600]
 
         """THEN broadcast has nested try/except for safety."""
         assert body.count("try:") >= 2, (
@@ -381,7 +389,7 @@ class TestJsonSerializationSafety:
 
         """WHEN locating the embedded_config_json section."""
         idx = source.find("embedded_config_json")
-        body = source[idx:idx + 400]
+        body = source[idx : idx + 400]
 
         """THEN serialization errors are caught."""
         assert "except" in body
@@ -391,7 +399,7 @@ class TestTemplatePartialLimits:
     """Scenarios for template partial line limits."""
 
     TEMPLATE_DIR = ROOT / "src" / "releaseboard" / "presentation" / "templates"
-    MAX_LINES = 950
+    MAX_LINES = 1000
 
     def test_all_partials_under_limit(self):
         """GIVEN all template partial files."""

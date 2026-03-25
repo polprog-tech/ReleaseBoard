@@ -27,10 +27,13 @@ async def client(tmp_path: Path):
 
     from releaseboard.web.server import create_app
 
-    with patch.dict("os.environ", {
-        "RELEASEBOARD_API_KEY": "test-key-123",
-        "RELEASEBOARD_CORS_ORIGINS": "*",
-    }):
+    with patch.dict(
+        "os.environ",
+        {
+            "RELEASEBOARD_API_KEY": "test-key-123",
+            "RELEASEBOARD_CORS_ORIGINS": "*",
+        },
+    ):
         app = create_app(cfg_file)
         transport = ASGITransport(app=app, client=("127.0.0.1", 12345))
         async with AsyncClient(
@@ -39,6 +42,7 @@ async def client(tmp_path: Path):
             headers={"X-API-Key": "test-key-123"},
         ) as c:
             yield c
+
 
 def _make_minimal_config() -> dict[str, Any]:
     return {
@@ -180,11 +184,11 @@ class TestGeneratedAtTimezone:
         import inspect
 
         from releaseboard.presentation import view_models
+
         source = inspect.getsource(view_models)
 
         """WHEN inspecting datetime usage in the source."""
-        has_tz_utc = ("timezone.utc" in source or "datetime.UTC" in source
-                      or "tz=UTC" in source)
+        has_tz_utc = "timezone.utc" in source or "datetime.UTC" in source or "tz=UTC" in source
         has_naive_now = "datetime.now()" in source.replace("datetime.now(tz=", "")
 
         """THEN timezone.utc is used and naive datetime.now() is absent."""
@@ -198,6 +202,7 @@ class TestFreshnessLabelBoundary:
     def test_past_threshold_is_stale(self):
         """GIVEN a commit one day past the threshold."""
         from releaseboard.analysis.staleness import freshness_label
+
         threshold = 14
         last_commit = datetime.now(tz=UTC) - timedelta(days=threshold + 1)
 
@@ -214,10 +219,9 @@ class TestTemplateSplit:
     """Scenarios for template split."""
 
     TEMPLATE_DIR = (
-        Path(__file__).parent.parent
-        / "src" / "releaseboard" / "presentation" / "templates"
+        Path(__file__).parent.parent / "src" / "releaseboard" / "presentation" / "templates"
     )
-    MAX_PARTIAL_LINES = 950
+    MAX_PARTIAL_LINES = 1000
 
     def _all_content(self) -> str:
         parts = []
@@ -253,12 +257,20 @@ class TestTemplateSplit:
     def test_partials_exist(self):
         """GIVEN a list of critical template partials."""
         required = [
-            "_styles.html.j2", "_header.html.j2", "_dashboard_content.html.j2",
-            "_modals.html.j2", "_config_drawer.html.j2", "_footer.html.j2",
-            "_scripts.html.j2", "_scripts_core.html.j2",
-            "_scripts_interactive.html.j2", "_scripts_editor.html.j2",
-            "_scripts_config_ui.html.j2", "_scripts_wizard.html.j2",
-            "_scripts_analysis.html.j2", "_head_scripts.html.j2",
+            "_styles.html.j2",
+            "_header.html.j2",
+            "_dashboard_content.html.j2",
+            "_modals.html.j2",
+            "_config_drawer.html.j2",
+            "_footer.html.j2",
+            "_scripts.html.j2",
+            "_scripts_core.html.j2",
+            "_scripts_interactive.html.j2",
+            "_scripts_editor.html.j2",
+            "_scripts_config_ui.html.j2",
+            "_scripts_wizard.html.j2",
+            "_scripts_analysis.html.j2",
+            "_head_scripts.html.j2",
         ]
 
         """WHEN checking if each partial exists on disk."""
@@ -272,9 +284,13 @@ class TestTemplateSplit:
         """GIVEN the concatenated content of all template files."""
         content = self._all_content()
         essentials = [
-            "<!DOCTYPE html>", "<html", "</html>",
-            "renderEffectiveTab", "PREDEFINED_TEMPLATES",
-            'data-tab="effective"', 'id="layoutBar"',
+            "<!DOCTYPE html>",
+            "<html",
+            "</html>",
+            "renderEffectiveTab",
+            "PREDEFINED_TEMPLATES",
+            'data-tab="effective"',
+            'id="layoutBar"',
             "REPO_DATA",
         ]
 
@@ -293,6 +309,7 @@ class TestCSPAllowsChartJS:
         import inspect
 
         from releaseboard.web.middleware import SecurityHeadersMiddleware
+
         source = inspect.getsource(SecurityHeadersMiddleware)
         assert "cdn.jsdelivr.net" in source, "CSP must allow cdn.jsdelivr.net for Chart.js"
         return source

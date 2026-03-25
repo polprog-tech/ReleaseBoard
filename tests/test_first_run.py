@@ -72,13 +72,16 @@ async def test_first_run_examples_endpoint(first_run_client):
 async def test_first_run_create_empty_config(first_run_client):
     """POST /api/config/create with mode=empty should create a valid config."""
     client, config_path = first_run_client
-    resp = await client.post("/api/config/create", json={
-        "mode": "empty",
-        "release_name": "Test Release",
-        "target_month": 6,
-        "target_year": 2025,
-        "branch_pattern": "release/{YYYY}.{MM}",
-    })
+    resp = await client.post(
+        "/api/config/create",
+        json={
+            "mode": "empty",
+            "release_name": "Test Release",
+            "target_month": 6,
+            "target_year": 2025,
+            "branch_pattern": "release/{YYYY}.{MM}",
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -104,10 +107,13 @@ async def test_first_run_create_import_config(first_run_client):
         },
         "repositories": [],
     }
-    resp = await client.post("/api/config/create", json={
-        "mode": "import",
-        "config": imported,
-    })
+    resp = await client.post(
+        "/api/config/create",
+        json={
+            "mode": "import",
+            "config": imported,
+        },
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -118,10 +124,13 @@ async def test_first_run_create_import_config(first_run_client):
 async def test_first_run_create_invalid_config(first_run_client):
     """POST /api/config/create with invalid data should return 422."""
     client, config_path = first_run_client
-    resp = await client.post("/api/config/create", json={
-        "mode": "import",
-        "config": {"invalid": True},
-    })
+    resp = await client.post(
+        "/api/config/create",
+        json={
+            "mode": "import",
+            "config": {"invalid": True},
+        },
+    )
     assert resp.status_code == 422
     assert not config_path.exists()
 
@@ -154,12 +163,15 @@ async def test_first_run_after_config_created_dashboard_works(tmp_path: Path):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create config first
-        resp = await client.post("/api/config/create", json={
-            "mode": "empty",
-            "release_name": "Post-Create Test",
-            "target_month": 1,
-            "target_year": 2025,
-        })
+        resp = await client.post(
+            "/api/config/create",
+            json={
+                "mode": "empty",
+                "release_name": "Post-Create Test",
+                "target_month": 1,
+                "target_year": 2025,
+            },
+        )
         assert resp.status_code == 200
 
         # Now dashboard should serve normal content (state was initialized)
@@ -172,6 +184,7 @@ class TestRendererFirstRun:
 
     def test_render_first_run_returns_html(self):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en", config_path="releaseboard.json")
         assert "<!DOCTYPE html>" in html or "<!doctype html>" in html.lower()
@@ -179,6 +192,7 @@ class TestRendererFirstRun:
 
     def test_render_first_run_contains_form_elements(self):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         # Should have form inputs for release config
@@ -187,6 +201,7 @@ class TestRendererFirstRun:
 
     def test_render_first_run_polish_locale(self):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="pl")
         assert "<!DOCTYPE html>" in html or "<!doctype html>" in html.lower()
@@ -198,7 +213,11 @@ class TestFirstRunI18n:
     def test_en_first_run_keys_exist(self):
         locale_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "i18n" / "locales" / "en.json"
+            / "src"
+            / "releaseboard"
+            / "i18n"
+            / "locales"
+            / "en.json"
         )
         data = json.loads(locale_path.read_text(encoding="utf-8"))
         required_keys = [
@@ -217,7 +236,11 @@ class TestFirstRunI18n:
     def test_pl_first_run_keys_exist(self):
         locale_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "i18n" / "locales" / "pl.json"
+            / "src"
+            / "releaseboard"
+            / "i18n"
+            / "locales"
+            / "pl.json"
         )
         data = json.loads(locale_path.read_text(encoding="utf-8"))
         required_keys = [
@@ -242,6 +265,7 @@ class TestCliFirstRun:
         import inspect
 
         from releaseboard.cli.app import serve
+
         sig = inspect.signature(serve)
         # The function should accept a Path without filesystem validation
         assert "config" in sig.parameters
@@ -249,6 +273,7 @@ class TestCliFirstRun:
     def test_create_app_accepts_first_run(self):
         """create_app should accept first_run keyword argument."""
         import inspect
+
         sig = inspect.signature(create_app)
         assert "first_run" in sig.parameters
 
@@ -258,6 +283,7 @@ class TestFirstRunShellParity:
 
     def _render(self, locale="en"):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         return DashboardRenderer().render_first_run(locale=locale)
 
     def test_has_sticky_header(self):
@@ -323,7 +349,11 @@ class TestFirstRunShellParity:
     def test_prepare_config_i18n_keys_exist(self):
         locale_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "i18n" / "locales" / "en.json"
+            / "src"
+            / "releaseboard"
+            / "i18n"
+            / "locales"
+            / "en.json"
         )
         data = json.loads(locale_path.read_text(encoding="utf-8"))
         assert "first_run.prepare_config" in data
@@ -338,7 +368,10 @@ class TestDashboardAutoOpenWizard:
         """The interactive scripts should check for open_wizard query param."""
         template_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "presentation" / "templates"
+            / "src"
+            / "releaseboard"
+            / "presentation"
+            / "templates"
             / "_scripts_interactive.html.j2"
         )
         content = template_path.read_text(encoding="utf-8")
@@ -354,6 +387,7 @@ class TestFirstRunLogoLayout:
 
     def _render(self, locale: str = "en") -> str:
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         return renderer.render_first_run(locale=locale)
 
@@ -383,6 +417,7 @@ class TestFirstRunLangRestore:
 
     def _render(self) -> str:
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         return renderer.render_first_run()
 
@@ -406,7 +441,10 @@ class TestReleasePilotVersionInFooter:
         """First-run footer template must handle rp_version."""
         template_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "presentation" / "templates"
+            / "src"
+            / "releaseboard"
+            / "presentation"
+            / "templates"
             / "first_run.html.j2"
         )
         content = template_path.read_text(encoding="utf-8")
@@ -416,18 +454,24 @@ class TestReleasePilotVersionInFooter:
         """Dashboard footer must use vm.version, not hardcoded version."""
         template_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "presentation" / "templates"
+            / "src"
+            / "releaseboard"
+            / "presentation"
+            / "templates"
             / "_footer.html.j2"
         )
         content = template_path.read_text(encoding="utf-8")
         assert "v{{ vm.version }}" in content
-        assert "v1.10.0" not in content  # no hardcoded version
+        assert "v1.1.0" not in content  # no hardcoded version
 
     def test_dashboard_footer_has_rp_version_conditional(self):
         """Dashboard footer must include vm.rp_version conditional."""
         template_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "presentation" / "templates"
+            / "src"
+            / "releaseboard"
+            / "presentation"
+            / "templates"
             / "_footer.html.j2"
         )
         content = template_path.read_text(encoding="utf-8")
@@ -438,6 +482,7 @@ class TestReleasePilotVersionInFooter:
         import dataclasses
 
         from releaseboard.presentation.view_models import DashboardViewModel
+
         field_names = [f.name for f in dataclasses.fields(DashboardViewModel)]
         assert "rp_version" in field_names
 
@@ -460,6 +505,7 @@ class TestDashboardEmptyReposState:
         vm.interactive = True
 
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         return renderer.render(vm)
 
@@ -503,6 +549,7 @@ class TestDashboardEmptyReposState:
         vm.interactive = True
 
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render(vm)
         assert 'id="emptyReposState"' not in html
@@ -538,6 +585,7 @@ class TestDashboardEmptyReposState:
         vm.interactive = True
 
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render(vm)
         assert 'class="metrics-grid' in html
@@ -551,7 +599,11 @@ class TestEmptyStateI18nKeys:
     def test_en_empty_state_keys_exist(self):
         locale_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "i18n" / "locales" / "en.json"
+            / "src"
+            / "releaseboard"
+            / "i18n"
+            / "locales"
+            / "en.json"
         )
         data = json.loads(locale_path.read_text(encoding="utf-8"))
         for key in [
@@ -566,7 +618,11 @@ class TestEmptyStateI18nKeys:
     def test_pl_empty_state_keys_exist(self):
         locale_path = (
             Path(__file__).resolve().parent.parent
-            / "src" / "releaseboard" / "i18n" / "locales" / "pl.json"
+            / "src"
+            / "releaseboard"
+            / "i18n"
+            / "locales"
+            / "pl.json"
         )
         data = json.loads(locale_path.read_text(encoding="utf-8"))
         for key in [
@@ -590,6 +646,7 @@ class TestTripleLogoFix:
     def test_light_logo_visible_dark_hidden(self):
         """fr-logo-light visible, dark/midnight hidden."""
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         # The fix: .fr-header-logo .fr-logo-light { display: block }
@@ -600,11 +657,13 @@ class TestTripleLogoFix:
     def test_no_blanket_svg_display_block(self):
         """Must NOT have .fr-header-logo svg { display: block } which causes triple render."""
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         import re
+
         # Must not have a rule that forces display:block on ALL svgs inside fr-header-logo
-        matches = re.findall(r'\.fr-header-logo\s+svg\s*\{[^}]*display\s*:\s*block', html)
+        matches = re.findall(r"\.fr-header-logo\s+svg\s*\{[^}]*display\s*:\s*block", html)
         assert len(matches) == 0, "Must not force display:block on all SVGs inside .fr-header-logo"
 
 
@@ -613,6 +672,7 @@ class TestLocalePreloadFirstRun:
 
     def test_locale_preload_script_present(self):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         assert "localStorage.getItem('rb_locale')" in html
@@ -621,6 +681,7 @@ class TestLocalePreloadFirstRun:
     def test_language_switch_saves_to_localstorage(self):
         """First-run language switch must save to localStorage rb_locale."""
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         assert "localStorage.setItem('rb_locale'" in html
@@ -632,18 +693,21 @@ class TestRedirectUrlsCarryLang:
     def test_with_lang_helper_defined(self):
         """withLang() helper must be present to append ?lang= to redirect URLs."""
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         assert "function withLang(url)" in html
 
     def test_create_fresh_uses_with_lang(self):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         assert "withLang(data.redirect)" in html
 
     def test_prepare_config_uses_with_lang(self):
         from releaseboard.presentation.renderer import DashboardRenderer
+
         renderer = DashboardRenderer()
         html = renderer.render_first_run(locale="en")
         assert "withLang('/?open_wizard=1')" in html
